@@ -35,6 +35,39 @@ dejar de repasar la debilita.
 - "Explícalo tú" y los jefes finales dan más, porque exigen entender, no solo reconocer.
 - No hay dinero real ni anuncios: es una app personal.
 
-## Pantallas diseñadas
-Mi aldea · Recompensa al terminar · Mejorar edificio · Informe del ataque.
-Los sprites están en `assets/sprites/` y se generan con `tools/mksprites.py`.
+
+## Vista isométrica y construcción libre
+- La aldea es una isla de **16×16 casillas** en vista isométrica, con edificios en vóxeles 3D pixel art.
+- **Construir:** abres la tienda, eliges un edificio y tocas una casilla. Se ve en verde si cabe y en coral si choca. Luego pulsas "Colocar".
+- **Mover:** tocas un edificio y pulsas "Mover". Cambiarlo de sitio es gratis.
+- Zoom 1x (vista completa) y 2x.
+
+## Defensas
+Cada defensa se **alimenta de un estudio**, y su fuerza = lo que recuerdas de ese estudio.
+
+| Defensa | Tamaño | Coste | Máx. | Papel |
+|---|---|---|---|---|
+| Cañón | 2×2 | 250 | 2 | Daño fuerte a corta distancia |
+| Torre de arqueras | 2×2 | 350 | 2 | Alcance medio, tierra y aire |
+| Catapulta | 2×2 | 450 | 1 | Daño en área, no alcanza de cerca |
+| Ballesta | 2×2 | 600 | 1 | Mucho alcance y disparo rápido |
+| Muro | 1×1 | 20 | 40 | Frena a los enemigos |
+
+Otros edificios: Ayuntamiento (4×4), Cuartel (3×3), Mina, Almacén, Laboratorio, Cabaña del constructor, y árboles y rocas como decoración.
+
+## Tropas y ataques (máximo 2 al día)
+- Las tropas se entrenan **solo estudiando**: 10 aciertos dan una arquera.
+- **Atacar** una fortaleza de la Niebla es un repaso: cada pregunta acertada lanza una tropa y destruye parte de la fortaleza. Cada fallo cuesta una tropa.
+- Estrellas: 40 %, 75 % y 100 % de destrucción. Botín = monedas según el % destruido.
+- **Límite de 2 ataques al día**, para que la aldea sea un premio y no sustituya al estudio. Las preguntas salen de tus propios estudios, sobre todo de las tarjetas que más te cuestan.
+
+## Más mecánicas
+- **Laboratorio:** los cristales mejoran tropas y defensas.
+- **Obstáculos:** quitar árboles y rocas cuesta monedas y a veces da un cristal.
+- **Logros → decoraciones:** estatuas y banderas por rachas, cursos completados o exámenes aprobados.
+- **Jefe semanal de la Niebla:** antes de una fecha de examen aparece un jefe especial. Para vencerlo hay que hacer un repaso mezclado de todo el tema.
+- **Descanso sano:** tras 10 min seguidos en la aldea, un aviso amable propone volver a estudiar. Fuera del estudio no se gana nada.
+
+## Archivos
+- Sprites 2D: `assets/sprites/` (`tools/mksprites.py`).
+- Sprites isométricos en vóxeles: `assets/iso/` y `meta.json` con el anclaje de cada uno (`tools/voxel.py`). Para colocar un edificio en la casilla (i, j): `x = OX + (i − j)·12 − ox`, `y = OY + (i + j)·6 − oy`.
