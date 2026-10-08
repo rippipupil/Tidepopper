@@ -96,6 +96,6 @@ Para que cada APK nuevo se instale encima del anterior, todos deben ir firmados 
 - `RELEASE_KEYSTORE_PASSWORD`: su contraseña.
 - `RELEASE_KEY_ALIAS` (opcional): el alias de la clave; si no se pone, se usa `tidepopper`.
 
-Puedes reutilizar la misma clave de Meteor Shower: copia sus dos secretos y añade `RELEASE_KEY_ALIAS` = `meteorshower`.
+Puedes reutilizar la clave de Meteor Shower, pero necesitas el archivo `.keystore` original y su contraseña: GitHub no deja leer un secreto una vez guardado, así que no se puede copiar de un repositorio a otro. En ese caso añade también `RELEASE_KEY_ALIAS` = `meteorshower`.
 
 Mientras falten los secretos, el APK se firma con una clave temporal. Solo se guarda como artefacto del workflow, sirve para probar y no se publica en Releases.
