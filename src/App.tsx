@@ -27,8 +27,18 @@ import TrueFalse from './screens/games/TrueFalse';
 import Anagram from './screens/games/Anagram';
 import Mixed from './screens/games/Mixed';
 import Draw from './screens/games/Draw';
+import ManualAi from './components/ManualAi';
 
 export default function App() {
+  return (
+    <>
+      <Screen />
+      <ManualAi />
+    </>
+  );
+}
+
+function Screen() {
   const { ready, update } = useApp();
   const { path, query } = useRoute();
   // Al abrir y cada minuto: terminan las obras y, si es un día nuevo con grietas, ataca la Niebla.

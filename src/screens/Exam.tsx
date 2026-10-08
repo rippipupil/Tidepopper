@@ -40,15 +40,11 @@ export default function Exam({ id }: { id: string }) {
   };
 
   const startAi = async () => {
-    if (!state.settings.apiKey) {
-      setErr('Pon tu clave de Claude en Perfil para el examen con IA. El examen rápido funciona sin ella.');
-      return;
-    }
     setErr('');
     setPhase({ kind: 'loading', text: 'Preparando tu examen…' });
     try {
       const { generateExam } = await import('../ai/claude');
-      const raw = await generateExam(state.settings.apiKey, study.name, study.summary ?? '', cards);
+      const raw = await generateExam(state.settings, study.name, study.summary ?? '', cards);
       const qs: ExamQuestion[] = raw.map((q) => (q.type === 'open' ? { kind: 'open', prompt: q.prompt, reference: q.reference } : { kind: 'choice', prompt: q.prompt, options: q.options, answer: q.answer, explanation: q.explanation }));
       setPhase({ kind: 'run', type: 'ia', qs, pos: 0, answers: qs.map(() => null), started: Date.now() });
     } catch (e) {
@@ -66,7 +62,7 @@ export default function Exam({ id }: { id: string }) {
       try {
         const { gradeOpenAnswers } = await import('../ai/claude');
         const grades = await gradeOpenAnswers(
-          state.settings.apiKey,
+          state.settings,
           open.map(({ q, k }) => ({ prompt: q.prompt, reference: q.kind === 'open' ? q.reference : '', answer: String(p.answers[k] ?? '') })),
         );
         open.forEach(({ k }, n) => (review[k] = { ok: grades[n].score / 10, note: `${grades[n].score}/10 · ${grades[n].feedback}` }));

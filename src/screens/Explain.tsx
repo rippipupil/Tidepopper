@@ -19,15 +19,11 @@ export default function Explain({ id }: { id: string }) {
   if (!study || !card) return <Missing />;
 
   const send = async () => {
-    if (!state.settings.apiKey) {
-      setErr('Pon tu clave de Claude en Perfil → Ajustes para que la IA te corrija.');
-      return;
-    }
     setBusy(true);
     setErr('');
     try {
       const { correctExplanation } = await import('../ai/claude');
-      const r = await correctExplanation(state.settings.apiKey, card.front, card.back, answer);
+      const r = await correctExplanation(state.settings, card.front, card.back, answer);
       setResult(r);
       const good = r.score >= 7 ? 1 : 0;
       update((s) => finishSession(s, good * 3, 3, Date.now(), 'game').state);

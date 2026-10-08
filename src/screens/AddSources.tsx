@@ -56,15 +56,11 @@ export default function AddSources({ id }: { id: string }) {
   };
 
   const generate = async () => {
-    if (!state.settings.apiKey) {
-      setMsg({ kind: 'err', text: 'Para que la IA cree el material, pon tu clave de Claude en Perfil → Ajustes. También puedes crear tarjetas a mano.' });
-      return;
-    }
     setBusy(true);
     setMsg(null);
     try {
       const { generateStudyPack } = await import('../ai/claude');
-      const pack = await generateStudyPack(state.settings.apiKey, study.name, pending.map((p) => p.part));
+      const pack = await generateStudyPack(state.settings, study.name, pending.map((p) => p.part));
       update((s) => {
         let n = s;
         for (const p of pending) n = addSource(n, p.source);

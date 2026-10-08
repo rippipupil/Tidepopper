@@ -5,13 +5,13 @@ App de estudio personal (web y móvil) en pixel art 3D. Estudias con tus propios
 ## Qué hace ya
 
 - **Asistente IA con cursos por niveles:**
-  - Le dices un tema (por ejemplo, código morse), tu nivel y para qué lo quieres, y Claude diseña un curso de 4 a 12 niveles.
+  - Le dices un tema (por ejemplo, código morse), tu nivel y para qué lo quieres, y la IA diseña un curso de 4 a 12 niveles.
   - Cada nivel tiene una lección, ideas clave y una práctica con 20 segundos por pregunta.
   - Con un 60 % pasas, con estrellas según la nota, y se abre el siguiente nivel.
   - Las tarjetas de cada nivel aprobado pasan a tu repaso.
 - **Chat con el asistente:** en cualquier estudio o curso, pregúntale lo que quieras. Responde con tu material delante. «Explícamelo mejor» en las flashcards también abre el chat.
 - **Mis estudios:** carpetas de colores, una por tema.
-- **Añadir apuntes:** PDF, fotos (de la cámara o la galería), texto pegado o tarjetas a mano. La IA (Claude) lee los PDF y las fotos directamente y crea un **resumen** y **tarjetas de repaso**.
+- **Añadir apuntes:** PDF, fotos (de la cámara o la galería), texto pegado o tarjetas a mano. La IA lee los PDF y las fotos directamente y crea un **resumen** y **tarjetas de repaso**.
 - **Flashcards con repetición espaciada:** cada tarjeta vuelve justo antes de que la olvides (*No la sabía · Dudé · La sabía*).
 - **Minijuegos** (con las tarjetas de cada estudio):
   - **Contrarreloj:** elige la definición en 10 s.
@@ -49,7 +49,7 @@ App de estudio personal (web y móvil) en pixel art 3D. Estudias con tus propios
 - **Laboratorio:** con cristales, tus tropas destruyen más en los ataques.
 - **La Niebla del Olvido:** cada día nuevo, si tienes tarjetas sin repasar, ataca. Roba más cuanto más débiles sean tus defensas, y los muros ayudan. Te deja un informe.
 - **Ataques:** máximo **2 al día**. Cada pregunta de repaso acertada lanza una arquera, y el botín depende de lo que destruyas.
-- **Perfil:** clave de Claude y copia de seguridad (descargar y restaurar).
+- **Perfil:** claves de la IA (gratis o de pago) y copia de seguridad (descargar y restaurar).
 
 El diseño y las mecánicas están en [`docs/vision.md`](docs/vision.md) y [`docs/aldea.md`](docs/aldea.md).
 
@@ -59,9 +59,14 @@ Todo se guarda **solo en tu dispositivo** (IndexedDB): estudios, tarjetas, aldea
 
 ## La IA
 
-Crear material y corregir explicaciones usa la API de Claude con **tu propia clave**. Se consigue en console.anthropic.com y se pega en *Perfil*.
+La IA funciona **gratis**. Se elige sola, en este orden, y si una falla (sin cuota, sin red…) pasa a la siguiente:
 
-Como la app es personal, llama a Claude directamente desde el dispositivo. No compartas tu clave ni una copia de la app con ella puesta. Sin clave, todo lo demás funciona creando tarjetas a mano.
+1. **Claude** (opcional, de pago): la mejor calidad. Solo si pones tu clave de console.anthropic.com.
+2. **Gemini** (gratis, recomendada): clave gratis sin tarjeta en [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Lee también PDF y fotos. En el plan gratis Google puede usar lo que envíes para mejorar sus modelos.
+3. **Groq** (gratis, de reserva): clave gratis en [console.groq.com/keys](https://console.groq.com/keys). Muchos usos al día, solo texto.
+4. **Copiar y pegar**: sin ninguna clave, la app prepara la petición, la pegas en tu app de Claude y pegas la respuesta de vuelta.
+
+Las claves se ponen en *Perfil* y se guardan solo en el dispositivo. La app es personal y llama a la IA directamente desde él, así que no compartas una copia de la app con tus claves puestas.
 
 ## Desarrollo
 

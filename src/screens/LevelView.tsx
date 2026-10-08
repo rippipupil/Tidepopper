@@ -26,15 +26,11 @@ export default function LevelView({ id, index }: { id: string; index: number }) 
 
   const load = async () => {
     if (!course || !level || level.content || busy) return;
-    if (!state.settings.apiKey) {
-      setErr('El asistente necesita tu clave de Claude. Ponla en Perfil.');
-      return;
-    }
     setBusy(true);
     setErr('');
     try {
       const { generateLevelContent } = await import('../ai/claude');
-      const content = await generateLevelContent(state.settings.apiKey, course, index);
+      const content = await generateLevelContent(state.settings, course, index);
       update((s) => setLevelContent(s, id, index, content));
     } catch (e) {
       const { describeAiError } = await import('../ai/claude');

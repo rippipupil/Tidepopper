@@ -1,29 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
+import { structured, text, type AiKeys, type AiPart } from './engine';
 
-// La clave de la API se guarda solo en este dispositivo (Ajustes). La app es
-// personal, por eso llama a Claude directamente desde el navegador.
-const MODEL = 'claude-opus-5-5';
-
-function client(apiKey: string): Anthropic {
-  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-}
-
-export type AiPart =
-  | { kind: 'text'; name: string; text: string }
-  | { kind: 'pdf'; name: string; base64: string }
-  | { kind: 'image'; name: string; base64: string; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' };
-
-function toBlocks(parts: AiPart[]): Anthropic.Beta.BetaContentBlockParam[] {
-  return parts.map((p): Anthropic.Beta.BetaContentBlockParam => {
-    if (p.kind === 'pdf') return { type: 'document', title: p.name, source: { type: 'base64', media_type: 'application/pdf', data: p.base64 } };
-    if (p.kind === 'image') return { type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.base64 } };
-    return { type: 'text', text: `Fuente «${p.name}»:\n\n${p.text}` };
-  });
-}
-
-export class AiRefusal extends Error {}
+// Tareas de la IA. Cada una se resuelve con la primera IA disponible: Claude,
+// Gemini, Groq o, sin claves, copiar y pegar en la app de Claude (ver engine.ts).
+export { describeAiError, AiRefusal, testProvider, providers, PROVIDER_NAME } from './engine';
+export type { AiKeys, AiPart, ProviderId } from './engine';
 
 const StudyPack = z.object({
   summary: z.string().describe('Resumen claro en español, en párrafos cortos, de lo esencial de las fuentes'),
@@ -34,20 +15,17 @@ const StudyPack = z.object({
 export type StudyPack = z.infer<typeof StudyPack>;
 
 /** Lee PDFs, fotos y textos y devuelve un resumen y tarjetas de repaso. */
-export async function generateStudyPack(apiKey: string, studyName: string, parts: AiPart[]): Promise<StudyPack> {
-  const res = await client(apiKey).beta.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'medium', format: betaZodOutputFormat(StudyPack) },
+export function generateStudyPack(keys: AiKeys, studyName: string, parts: AiPart[]): Promise<StudyPack> {
+  return structured(keys, {
+    schema: StudyPack,
+    maxTokens: 16000,
+    effort: 'medium',
     system:
       'Eres un profesor que prepara material de estudio en español. Usa solo lo que dicen las fuentes del alumno. ' +
       'Las tarjetas deben poder responderse sin ver las fuentes: un término o pregunta concreta delante, y detrás una respuesta corta y exacta.',
-    messages: [{ role: 'user', content: [...toBlocks(parts), { type: 'text', text: `Prepara el material para el estudio «${studyName}».` }] }],
+    parts,
+    user: `Prepara el material para el estudio «${studyName}».`,
   });
-  if (res.stop_reason === 'refusal' || !res.parsed_output) throw new AiRefusal('Claude no ha podido procesar estas fuentes.');
-  return res.parsed_output;
 }
 
 const Correction = z.object({
@@ -60,33 +38,14 @@ const Correction = z.object({
 export type Correction = z.infer<typeof Correction>;
 
 /** Corrige una explicación escrita por el alumno sobre un concepto. */
-export async function correctExplanation(apiKey: string, concept: string, reference: string, answer: string): Promise<Correction> {
-  const res = await client(apiKey).beta.messages.parse({
-    model: MODEL,
-    max_tokens: 4000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'low', format: betaZodOutputFormat(Correction) },
+export function correctExplanation(keys: AiKeys, concept: string, reference: string, answer: string): Promise<Correction> {
+  return structured(keys, {
+    schema: Correction,
+    maxTokens: 4000,
+    effort: 'low',
     system: 'Eres un profesor amable y exigente. Corriges en español, con frases cortas y concretas, sin repetir la respuesta del alumno.',
-    messages: [
-      {
-        role: 'user',
-        content: `Concepto: ${concept}\nReferencia de sus apuntes: ${reference}\n\nExplicación del alumno:\n${answer}\n\nCorrígela sobre 10.`,
-      },
-    ],
+    user: `Concepto: ${concept}\nReferencia de sus apuntes: ${reference}\n\nExplicación del alumno:\n${answer}\n\nCorrígela sobre 10.`,
   });
-  if (res.stop_reason === 'refusal' || !res.parsed_output) throw new AiRefusal('Claude no ha podido corregir esta respuesta.');
-  return res.parsed_output;
-}
-
-export function describeAiError(e: unknown): string {
-  if (e instanceof AiRefusal) return e.message;
-  if (e instanceof Anthropic.AuthenticationError) return 'La clave de la API no es válida. Revísala en Ajustes.';
-  if (e instanceof Anthropic.RateLimitError) return 'Demasiadas peticiones seguidas. Espera un minuto y vuelve a probar.';
-  if (e instanceof Anthropic.BadRequestError) return `Claude no ha aceptado la petición: ${e.message}`;
-  if (e instanceof Anthropic.APIConnectionError) return 'Sin conexión con Claude. Comprueba internet.';
-  if (e instanceof Anthropic.APIError) return `Error de Claude (${e.status}). Prueba otra vez.`;
-  return 'Algo ha fallado al hablar con Claude.';
 }
 
 const ExamPack = z.object({
@@ -114,21 +73,18 @@ export interface AiExamQuestion {
 }
 
 /** Prepara un examen tipo test + desarrollo a partir del resumen y las tarjetas. */
-export async function generateExam(apiKey: string, studyName: string, summary: string, cards: { front: string; back: string }[]): Promise<AiExamQuestion[]> {
+export async function generateExam(keys: AiKeys, studyName: string, summary: string, cards: { front: string; back: string }[]): Promise<AiExamQuestion[]> {
   const material = [summary ? `RESUMEN:\n${summary}` : '', 'TARJETAS:', ...cards.map((c) => `- ${c.front}: ${c.back}`)].join('\n');
-  const res = await client(apiKey).beta.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'medium', format: betaZodOutputFormat(ExamPack) },
+  const out = await structured(keys, {
+    schema: ExamPack,
+    maxTokens: 16000,
+    effort: 'medium',
     system:
       'Eres un profesor que pone exámenes justos en español. Pregunta solo por lo que está en el material del alumno. ' +
       'Las opciones incorrectas deben ser plausibles, no absurdas. Mezcla preguntas de memoria con otras de comprender y relacionar.',
-    messages: [{ role: 'user', content: `Pon un examen del tema «${studyName}» con este material:\n\n${material}` }],
+    user: `Pon un examen del tema «${studyName}» con este material:\n\n${material}`,
   });
-  if (res.stop_reason === 'refusal' || !res.parsed_output) throw new AiRefusal('Claude no ha podido preparar el examen.');
-  return res.parsed_output.questions.filter((q) => (q.type === 'choice' ? q.options.length >= 2 && q.answer >= 0 && q.answer < q.options.length : q.prompt.trim().length > 0));
+  return out.questions.filter((q) => (q.type === 'choice' ? q.options.length >= 2 && q.answer >= 0 && q.answer < q.options.length : q.prompt.trim().length > 0));
 }
 
 const OpenGrades = z.object({
@@ -136,19 +92,16 @@ const OpenGrades = z.object({
 });
 
 /** Corrige de golpe las preguntas de desarrollo de un examen (0–10 cada una). */
-export async function gradeOpenAnswers(apiKey: string, items: { prompt: string; reference: string; answer: string }[]): Promise<{ score: number; feedback: string }[]> {
-  const text = items.map((it, k) => `PREGUNTA ${k + 1}: ${it.prompt}\nRespuesta modelo: ${it.reference}\nRespuesta del alumno: ${it.answer || '(en blanco)'}`).join('\n\n');
-  const res = await client(apiKey).beta.messages.parse({
-    model: MODEL,
-    max_tokens: 4000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'low', format: betaZodOutputFormat(OpenGrades) },
+export async function gradeOpenAnswers(keys: AiKeys, items: { prompt: string; reference: string; answer: string }[]): Promise<{ score: number; feedback: string }[]> {
+  const body = items.map((it, k) => `PREGUNTA ${k + 1}: ${it.prompt}\nRespuesta modelo: ${it.reference}\nRespuesta del alumno: ${it.answer || '(en blanco)'}`).join('\n\n');
+  const out = await structured(keys, {
+    schema: OpenGrades,
+    maxTokens: 4000,
+    effort: 'low',
     system: 'Eres un profesor que corrige exámenes en español con criterio y amabilidad. Una respuesta en blanco vale 0. Devuelve una nota por pregunta, en el mismo orden.',
-    messages: [{ role: 'user', content: text }],
+    user: body,
   });
-  if (res.stop_reason === 'refusal' || !res.parsed_output) throw new AiRefusal('Claude no ha podido corregir el examen.');
-  return items.map((_, k) => res.parsed_output!.grades[k] ?? { score: 0, feedback: 'Sin corregir.' });
+  return items.map((_, k) => out.grades[k] ?? { score: 0, feedback: 'Sin corregir.' });
 }
 
 // ---------- Asistente IA: cursos por niveles ----------
@@ -163,23 +116,15 @@ const Outline = z.object({
 export type CourseOutline = z.infer<typeof Outline>;
 
 /** Diseña el temario de un curso: niveles de menos a más. */
-export async function generateCourseOutline(apiKey: string, topic: string, goal: string, start: keyof typeof START_TEXT, levels: number): Promise<CourseOutline> {
-  const res = await client(apiKey).beta.messages.parse({
-    model: MODEL,
-    max_tokens: 4000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'medium', format: betaZodOutputFormat(Outline) },
+export async function generateCourseOutline(keys: AiKeys, topic: string, goal: string, start: keyof typeof START_TEXT, levels: number): Promise<CourseOutline> {
+  const out = await structured(keys, {
+    schema: Outline,
+    maxTokens: 4000,
+    effort: 'medium',
     system: 'Eres un profesor que diseña cursos cortos en español, con niveles que suben de dificultad poco a poco. Cada nivel se estudia en unos 15 minutos.',
-    messages: [
-      {
-        role: 'user',
-        content: `Tema: ${topic}\nObjetivo del alumno: ${goal || 'aprenderlo bien'}\nEl alumno ${START_TEXT[start]}.\nDiseña un curso de exactamente ${levels} niveles.`,
-      },
-    ],
+    user: `Tema: ${topic}\nObjetivo del alumno: ${goal || 'aprenderlo bien'}\nEl alumno ${START_TEXT[start]}.\nDiseña un curso de exactamente ${levels} niveles.`,
   });
-  if (res.stop_reason === 'refusal' || !res.parsed_output) throw new AiRefusal('Claude no ha podido preparar este curso.');
-  return { ...res.parsed_output, levels: res.parsed_output.levels.slice(0, levels) };
+  return { ...out, levels: out.levels.slice(0, levels) };
 }
 
 const Level = z.object({
@@ -194,45 +139,30 @@ export type GeneratedLevel = z.infer<typeof Level>;
 
 /** Escribe la lección, las tarjetas y la práctica de un nivel. */
 export async function generateLevelContent(
-  apiKey: string,
+  keys: AiKeys,
   course: { topic: string; goal: string; start: keyof typeof START_TEXT; levels: { title: string; goal: string }[] },
   index: number,
 ): Promise<GeneratedLevel> {
   const plan = course.levels.map((l, k) => `${k + 1}. ${l.title} — ${l.goal}${k === index ? '   ← ESTE NIVEL' : ''}`).join('\n');
-  const res = await client(apiKey).beta.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'medium', format: betaZodOutputFormat(Level) },
+  const out = await structured(keys, {
+    schema: Level,
+    maxTokens: 16000,
+    effort: 'medium',
     system:
       'Eres un profesor paciente que escribe en español sencillo. Explica solo lo de este nivel, apoyándote en lo que ya se vio en los anteriores. ' +
       'Las preguntas de la práctica deben poder responderse con la lección, y sus opciones incorrectas deben ser creíbles.',
-    messages: [{ role: 'user', content: `Curso: ${course.topic}\nObjetivo: ${course.goal || 'aprenderlo bien'}\nEl alumno ${START_TEXT[course.start]}.\n\nTemario:\n${plan}\n\nEscribe el nivel ${index + 1}.` }],
+    user: `Curso: ${course.topic}\nObjetivo: ${course.goal || 'aprenderlo bien'}\nEl alumno ${START_TEXT[course.start]}.\n\nTemario:\n${plan}\n\nEscribe el nivel ${index + 1}.`,
   });
-  if (res.stop_reason === 'refusal' || !res.parsed_output) throw new AiRefusal('Claude no ha podido preparar este nivel.');
-  const out = res.parsed_output;
   return { ...out, quiz: out.quiz.filter((q) => q.options.length >= 2 && q.answer >= 0 && q.answer < q.options.length) };
 }
 
 /** Responde en el chat del asistente sobre un estudio concreto. */
-export async function chatReply(apiKey: string, context: string, history: { role: 'user' | 'assistant'; text: string }[]): Promise<string> {
-  const res = await client(apiKey).beta.messages.create({
-    model: MODEL,
-    max_tokens: 4000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'low' },
+export function chatReply(keys: AiKeys, context: string, history: { role: 'user' | 'assistant'; text: string }[]): Promise<string> {
+  return text(keys, {
     system:
       'Eres el asistente de estudio de Tidepopper. Respondes en español, claro y breve (como mucho 2-3 párrafos cortos), con ejemplos cuando ayuden. ' +
       'Si te preguntan algo del material del alumno, básate en él. Sin markdown complejo: solo párrafos y, si hace falta, guiones.\n\n' +
       `Material del alumno:\n${context}`,
-    messages: history.map((m) => ({ role: m.role, content: m.text })),
+    history,
   });
-  if (res.stop_reason === 'refusal') throw new AiRefusal('Claude no puede responder a eso.');
-  return res.content
-    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('\n')
-    .trim();
 }

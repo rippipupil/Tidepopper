@@ -19,10 +19,6 @@ export default function Chat({ id, initial }: { id: string; initial: string }) {
   const send = async () => {
     const q = text.trim();
     if (!q || busy) return;
-    if (!state.settings.apiKey) {
-      setErr('El asistente necesita tu clave de Claude. Ponla en Perfil.');
-      return;
-    }
     setText('');
     setErr('');
     const mine = { role: 'user' as const, text: q, at: Date.now() };
@@ -35,7 +31,7 @@ export default function Chat({ id, initial }: { id: string; initial: string }) {
         .join('\n');
       const context = `Estudio: ${study.name}\n${study.summary ? `Resumen:\n${study.summary.slice(0, 12000)}\n` : ''}${cards ? `Tarjetas:\n${cards}` : ''}`;
       const { chatReply } = await import('../ai/claude');
-      const reply = await chatReply(state.settings.apiKey, context, [...msgs, mine].slice(-20));
+      const reply = await chatReply(state.settings, context, [...msgs, mine].slice(-20));
       update((s) => addChat(s, id, { role: 'assistant', text: reply, at: Date.now() }));
     } catch (e) {
       const { describeAiError } = await import('../ai/claude');

@@ -25,15 +25,11 @@ export default function CourseNew() {
   const courses = state.studies.filter((s) => s.course);
 
   const create = async () => {
-    if (!state.settings.apiKey) {
-      setErr('El asistente necesita tu clave de Claude. Ponla en Perfil.');
-      return;
-    }
     setBusy(true);
     setErr('');
     try {
       const { generateCourseOutline } = await import('../ai/claude');
-      const o = await generateCourseOutline(state.settings.apiKey, topic.trim(), goal.trim(), start, levels);
+      const o = await generateCourseOutline(state.settings, topic.trim(), goal.trim(), start, levels);
       const course: Course = { topic: topic.trim(), goal: goal.trim(), start, description: o.description, levels: o.levels.map((l) => newLevel(l.title, l.goal)) };
       const id = uid();
       update((s) => createCourse(s, id, o.title || topic.trim(), course, Date.now()));

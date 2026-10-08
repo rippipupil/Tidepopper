@@ -20,7 +20,7 @@ export function initialState(): AppState {
     wallet: { coins: 300, gems: 0, xp: 0 },
     village: startingVillage(),
     streak: { lastDay: '', days: 0 },
-    settings: { apiKey: '' },
+    settings: { apiKey: '', geminiKey: '', groqKey: '' },
   };
 }
 

@@ -125,7 +125,12 @@ export interface Streak {
 }
 
 export interface Settings {
+  /** Clave de la API de Claude (de pago). */
   apiKey: string;
+  /** Clave gratis de Google AI Studio. */
+  geminiKey: string;
+  /** Clave gratis de Groq. */
+  groqKey: string;
 }
 
 export interface ExamRecord {
