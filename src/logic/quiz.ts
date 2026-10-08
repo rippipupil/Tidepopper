@@ -1,3 +1,5 @@
+import { pickDistractors } from './distractors';
+
 export interface QuizItem {
   cardId: string;
   prompt: string;
@@ -14,14 +16,14 @@ function shuffle<T>(xs: T[], rnd: () => number): T[] {
   return a;
 }
 
-/** Preguntas de elegir la respuesta correcta entre 4, usando las otras tarjetas como señuelos. */
-export function buildQuiz(cards: { id: string; front: string; back: string }[], count: number, rnd: () => number = Math.random): QuizItem[] {
+/** Preguntas de elegir la correcta entre 4. Los señuelos se parecen a la respuesta (ver distractors.ts). */
+export function buildQuiz(cards: { id: string; front: string; back: string; wrong?: string[] }[], count: number, rnd: () => number = Math.random): QuizItem[] {
   const pool = cards.filter((c, k, all) => all.findIndex((x) => x.back === c.back) === k);
   if (pool.length < 4) return [];
   return shuffle(pool, rnd)
     .slice(0, count)
     .map((c) => {
-      const decoys = shuffle(pool.filter((x) => x.id !== c.id), rnd).slice(0, 3).map((x) => x.back);
+      const decoys = pickDistractors(c.back, c.wrong, pool.filter((x) => x.id !== c.id).map((x) => x.back), 3, rnd);
       const options = shuffle([c.back, ...decoys], rnd);
       return { cardId: c.id, prompt: c.front, options, answer: options.indexOf(c.back) };
     });

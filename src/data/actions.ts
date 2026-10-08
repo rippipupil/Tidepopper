@@ -62,10 +62,13 @@ export function setSummary(s: AppState, studyId: string, summary: string): AppSt
   return { ...s, studies: s.studies.map((x) => (x.id === studyId ? { ...x, summary } : x)) };
 }
 
-export function addCards(s: AppState, studyId: string, items: { front: string; back: string }[], now: number, ids: () => string): AppState {
+export function addCards(s: AppState, studyId: string, items: { front: string; back: string; wrong?: string[] }[], now: number, ids: () => string): AppState {
   const cards: Card[] = items
     .filter((c) => c.front.trim() && c.back.trim())
-    .map((c, k) => ({ id: ids(), studyId, front: c.front.trim(), back: c.back.trim(), createdAt: now + k, sched: newSchedule(now) }));
+    .map((c, k) => {
+      const wrong = (c.wrong ?? []).map((w) => w.trim()).filter((w) => w && w !== c.back.trim());
+      return { id: ids(), studyId, front: c.front.trim(), back: c.back.trim(), ...(wrong.length ? { wrong } : {}), createdAt: now + k, sched: newSchedule(now) };
+    });
   return { ...s, cards: [...s.cards, ...cards] };
 }
 

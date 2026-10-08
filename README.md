@@ -6,13 +6,15 @@ App de estudio personal (web y móvil) en pixel art 3D. Estudias con tus propios
 
 - **Asistente IA con cursos por niveles:**
   - Le dices un tema (por ejemplo, código morse), tu nivel y para qué lo quieres, y la IA diseña un curso de 4 a 12 niveles.
-  - Cada nivel tiene una lección, ideas clave y una práctica con 20 segundos por pregunta.
+  - Cada nivel es una **lección interactiva** al estilo Duolingo: ideas cortas con ejemplos que se alternan con ejercicios (elegir, verdadero o falso, completar la frase, ordenar, unir parejas y escribir).
+  - Respuesta al momento, racha de aciertos 🔥, y los ejercicios fallados se repiten al final.
   - Con un 60 % pasas, con estrellas según la nota, y se abre el siguiente nivel.
   - Las tarjetas de cada nivel aprobado pasan a tu repaso.
 - **Chat con el asistente:** en cualquier estudio o curso, pregúntale lo que quieras. Responde con tu material delante. «Explícamelo mejor» en las flashcards también abre el chat.
 - **Mis estudios:** carpetas de colores, una por tema.
 - **Añadir apuntes:** PDF, fotos (de la cámara o la galería), texto pegado o tarjetas a mano. La IA lee los PDF y las fotos directamente y crea un **resumen** y **tarjetas de repaso**.
 - **Flashcards con repetición espaciada:** cada tarjeta vuelve justo antes de que la olvides (*No la sabía · Dudé · La sabía*).
+- **Preguntas que hacen pensar:** las opciones incorrectas se parecen a la buena (mismo tipo, formato y tema). La IA escribe para cada tarjeta errores típicos que se confunden con la respuesta.
 - **Minijuegos** (con las tarjetas de cada estudio):
   - **Contrarreloj:** elige la definición en 10 s.
   - **Parejas:** une cada término con su definición.

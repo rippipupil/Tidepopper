@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../data/store';
 import { finishLevel, setLevelContent } from '../data/actions';
 import { uid } from '../data/db';
 import { levelState, PASS_PCT } from '../logic/course';
+import { encourage, isExercise, praise, stepsOf } from '../logic/lesson';
+import { StepView } from './lesson/Steps';
 import { go } from '../router';
 import { Header, Progress } from '../components/ui';
 import { Missing } from './StudyView';
 
-const SECONDS = 20;
-type Phase = 'lesson' | 'quiz' | 'result';
+type Phase = 'play' | 'result';
 
 export default function LevelView({ id, index }: { id: string; index: number }) {
   const { state, update } = useApp();
@@ -17,21 +18,25 @@ export default function LevelView({ id, index }: { id: string; index: number }) 
   const level = course?.levels[index];
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [phase, setPhase] = useState<Phase>('lesson');
+  const [phase, setPhase] = useState<Phase>('play');
+  // Cola de pasos: los ejercicios fallados vuelven al final una vez.
+  const [queue, setQueue] = useState<number[] | null>(null);
   const [pos, setPos] = useState(0);
-  const [picked, setPicked] = useState<number | null>(null);
-  const [time, setTime] = useState(SECONDS);
-  const [correct, setCorrect] = useState(0);
-  const [result, setResult] = useState<{ passed: boolean; stars: number; coins: number; xp: number } | null>(null);
+  const [answer, setAnswer] = useState<boolean | null>(null);
+  const [first, setFirst] = useState<Record<number, boolean>>({});
+  const [combo, setCombo] = useState(0);
+  const [hits, setHits] = useState(0);
+  const [result, setResult] = useState<{ passed: boolean; stars: number; coins: number; xp: number; correct: number; total: number } | null>(null);
 
-  const load = async () => {
-    if (!course || !level || level.content || busy) return;
+  const load = async (redo = false) => {
+    if (!course || !level || (level.content && !redo) || busy) return;
     setBusy(true);
     setErr('');
     try {
       const { generateLevelContent } = await import('../ai/claude');
       const content = await generateLevelContent(state.settings, course, index);
       update((s) => setLevelContent(s, id, index, content));
+      if (redo) setQueue(null);
     } catch (e) {
       const { describeAiError } = await import('../ai/claude');
       setErr(describeAiError(e));
@@ -46,11 +51,10 @@ export default function LevelView({ id, index }: { id: string; index: number }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, index]);
 
+  const steps = useMemo(() => (level?.content ? stepsOf(level.content) : []), [level?.content]);
   useEffect(() => {
-    if (phase !== 'quiz' || picked !== null || time === 0) return;
-    const t = window.setTimeout(() => setTime((x) => x - 1), 1000);
-    return () => window.clearTimeout(t);
-  }, [phase, picked, time]);
+    if (steps.length && !queue) setQueue(steps.map((_, k) => k));
+  }, [steps, queue]);
 
   if (!study || !course || !level) return <Missing />;
   if (levelState(course, index) === 'locked')
@@ -62,7 +66,7 @@ export default function LevelView({ id, index }: { id: string; index: number }) 
     );
 
   const content = level.content;
-  if (!content)
+  if (!content || !queue)
     return (
       <main className="screen">
         <Header back={`#/curso/${id}`} title={`Nivel ${index + 1}`} />
@@ -77,46 +81,27 @@ export default function LevelView({ id, index }: { id: string; index: number }) 
       </main>
     );
 
-  if (phase === 'lesson')
-    return (
-      <main className="screen" style={{ paddingBottom: 32 }}>
-        <Header back={`#/curso/${id}`} title={`Nivel ${index + 1} · ${level.title}`} />
-        <article className="px" style={{ padding: 20, fontSize: 16, lineHeight: 1.6 }}>
-          {content.lesson.split(/\n\s*\n/).map((p, k) => (
-            <p key={k} style={{ margin: k ? '12px 0 0' : 0, whiteSpace: 'pre-wrap' }}>
-              {p}
-            </p>
-          ))}
-        </article>
-        <section className="lcd" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 19, color: 'var(--dim)' }}>&gt; IDEAS CLAVE</div>
-          {content.keyPoints.map((k, n) => (
-            <div key={n} style={{ fontFamily: 'var(--f-body)', fontSize: 15, color: 'var(--text)' }}>
-              · {k}
-            </div>
-          ))}
-        </section>
-        <div className="row">
-          <a className="btn ghost" href={`#/estudio/${id}/chat?q=${encodeURIComponent(`Tengo una duda sobre «${level.title}»: `)}`}>
-            Preguntar
-          </a>
-          <button className="btn gold grow" disabled={content.quiz.length === 0} onClick={() => setPhase('quiz')}>
-            Empezar práctica
-          </button>
-        </div>
-      </main>
-    );
+  const exercises = steps.map((st, k) => (isExercise(st) ? k : -1)).filter((k) => k >= 0);
 
-  const total = content.quiz.length;
+  const restart = () => {
+    setPhase('play');
+    setQueue(steps.map((_, k) => k));
+    setPos(0);
+    setAnswer(null);
+    setFirst({});
+    setCombo(0);
+    setHits(0);
+    setResult(null);
+  };
 
   if (phase === 'result' && result) {
-    const pct = Math.round((100 * correct) / total);
+    const pct = Math.round((100 * result.correct) / result.total);
     return (
       <main className="screen" style={{ paddingBottom: 32 }}>
         <Header back={`#/curso/${id}`} title={`Nivel ${index + 1}`} />
-        <section className="lcd" style={{ padding: 20, textAlign: 'center' }}>
+        <section className="lcd pop" style={{ padding: 20, textAlign: 'center' }}>
           <div style={{ fontSize: 20, color: 'var(--dim)' }}>
-            {correct}/{total} ACIERTOS · {pct}%
+            {result.correct}/{result.total} A LA PRIMERA · {pct}%
           </div>
           <div style={{ fontSize: 48, color: 'var(--gold)', letterSpacing: 6 }}>{'★'.repeat(result.stars) + '☆'.repeat(3 - result.stars)}</div>
           <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: 22, color: 'var(--text)' }}>{result.passed ? '¡Nivel superado!' : `Necesitas un ${PASS_PCT}% para pasar`}</div>
@@ -129,19 +114,19 @@ export default function LevelView({ id, index }: { id: string; index: number }) 
             </span>
           </div>
         </section>
+        {content.keyPoints.length > 0 && (
+          <section className="px" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <h2>Lo que has aprendido</h2>
+            {content.keyPoints.map((k, n) => (
+              <div key={n} style={{ fontSize: 15, lineHeight: 1.4 }}>
+                ✓ {k}
+              </div>
+            ))}
+          </section>
+        )}
         {result.passed && <p className="muted" style={{ margin: 0 }}>Las tarjetas de este nivel ya están en tu repaso: alimentan tus defensas y tus exámenes.</p>}
         <div className="row" style={{ marginTop: 'auto' }}>
-          <button
-            className="btn ghost grow"
-            onClick={() => {
-              setPhase('lesson');
-              setPos(0);
-              setPicked(null);
-              setCorrect(0);
-              setTime(SECONDS);
-              setResult(null);
-            }}
-          >
+          <button className="btn ghost grow" onClick={restart}>
             Repetir nivel
           </button>
           {result.passed && index + 1 < course.levels.length ? (
@@ -158,61 +143,80 @@ export default function LevelView({ id, index }: { id: string; index: number }) 
     );
   }
 
-  const q = content.quiz[pos];
-  const answered = picked !== null || time === 0;
-  const pick = (k: number) => {
-    if (answered) return;
-    setPicked(k);
-    if (k === q.answer) setCorrect((c) => c + 1);
+  const k = queue[pos];
+  const step = steps[k];
+  const retry = pos >= steps.length;
+
+  const onAnswer = (ok: boolean) => {
+    setAnswer(ok);
+    if (!(k in first)) {
+      setFirst((f) => ({ ...f, [k]: ok }));
+      // Lo fallado vuelve al final para practicarlo otra vez.
+      if (!ok) setQueue((q) => [...q!, k]);
+    }
+    setCombo((c) => (ok ? c + 1 : 0));
+    if (ok) setHits((h) => h + 1);
   };
+
   const next = () => {
-    if (pos + 1 < total) {
+    setAnswer(null);
+    if (pos + 1 < queue.length) {
       setPos(pos + 1);
-      setPicked(null);
-      setTime(SECONDS);
       return;
     }
+    const total = Math.max(1, exercises.length);
+    const correct = exercises.length ? exercises.filter((x) => first[x]).length : 1;
     const now = Date.now();
     const r = finishLevel(state, id, index, correct, total, now, uid);
     update((s) => finishLevel(s, id, index, correct, total, now, uid).state);
-    setResult({ passed: r.passed, stars: r.stars, coins: r.reward?.coins ?? 0, xp: r.reward?.xp ?? 0 });
+    setResult({ passed: r.passed, stars: r.stars, coins: r.reward?.coins ?? 0, xp: r.reward?.xp ?? 0, correct, total });
     setPhase('result');
   };
 
+  const explain = step.type === 'explica';
   return (
     <main className="screen" style={{ paddingBottom: 32 }}>
-      <Header back={`#/curso/${id}`} title={`Práctica · Nivel ${index + 1}`}>
-        <span className="vt" style={{ fontSize: 22, color: time <= 5 && !answered ? 'var(--coral)' : 'var(--glow)' }}>
-          {time}s
-        </span>
+      <Header back={`#/curso/${id}`} title={`Nivel ${index + 1} · ${level.title}`}>
+        {combo >= 2 && (
+          <span className="vt pop" key={combo} style={{ fontSize: 22, color: 'var(--gold)' }} aria-label={`Racha de ${combo}`}>
+            🔥x{combo}
+          </span>
+        )}
       </Header>
-      <Progress value={(100 * time) / SECONDS} color={time <= 5 ? 'var(--coral)' : 'var(--blue-hi)'} track="var(--lcd-hi)" height={10} />
-      <section className="lcd" style={{ padding: '18px 16px' }}>
-        <div style={{ fontSize: 18, color: 'var(--dim)' }}>
-          PREGUNTA {pos + 1}/{total}
+      <Progress value={(100 * pos) / queue.length} color="var(--mint)" track="var(--lcd-hi)" height={10} />
+      {retry && <div style={{ fontFamily: 'var(--f-pixel)', fontSize: 19, color: 'var(--gold)' }}>&gt; REPASO DE FALLOS</div>}
+      {!content.steps && pos === 0 && (
+        <button className="btn ghost block" disabled={busy} onClick={() => void load(true)}>
+          {busy ? 'Rehaciendo la lección…' : '✨ Rehacer como lección interactiva'}
+        </button>
+      )}
+      {err && (
+        <div className="lcd toast" role="alert" style={{ fontSize: 17, color: 'var(--coral)' }}>
+          {err}
         </div>
-        <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: 20, color: 'var(--text)', marginTop: 6 }}>{q.prompt}</div>
-      </section>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {q.options.map((o, k) => {
-          const bg = !answered ? 'var(--paper)' : k === q.answer ? 'var(--mint)' : k === picked ? 'var(--coral)' : '#7f93a5';
-          return (
-            <button key={k} className="px" onClick={() => pick(k)} style={{ border: 0, cursor: 'pointer', textAlign: 'left', padding: '14px 16px', fontSize: 15, fontWeight: 600, background: bg }}>
-              {o}
-            </button>
-          );
-        })}
-      </div>
-      {answered && (
-        <>
-          <div className="lcd toast" role="status" style={{ fontSize: 18, color: picked === q.answer ? 'var(--mint)' : 'var(--coral)' }}>
-            {picked === q.answer ? '¡BIEN! ' : time === 0 && picked === null ? '¡TIEMPO! ' : 'CASI. '}
-            <span style={{ fontFamily: 'var(--f-body)', fontSize: 14, color: 'var(--text)' }}>{q.explanation}</span>
-          </div>
-          <button className="btn block" onClick={next}>
-            {pos + 1 < total ? 'Siguiente' : 'Ver resultado'}
+      )}
+
+      <StepView key={pos} step={step} done={answer !== null} onAnswer={onAnswer} />
+
+      {explain && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
+          <button className="btn gold block" onClick={next}>
+            {pos === 0 ? '¡Vamos!' : '¡Entendido!'}
           </button>
-        </>
+          <a className="btn ghost block" href={`#/estudio/${id}/chat?q=${encodeURIComponent(`Explícamelo de otra forma: ${step.text}`)}`}>
+            Explícamelo de otra forma
+          </a>
+        </div>
+      )}
+      {!explain && answer !== null && (
+        <div className={`lcd toast ${answer ? 'pop' : 'shake'}`} role="status" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
+          <div style={{ fontSize: 22, color: answer ? 'var(--mint)' : 'var(--coral)' }}>{answer ? praise(hits) : encourage(pos)}</div>
+          {step.explanation && <div style={{ fontFamily: 'var(--f-body)', fontSize: 15, color: 'var(--text)', lineHeight: 1.45 }}>{step.explanation}</div>}
+          {!answer && !retry && <div style={{ fontFamily: 'var(--f-body)', fontSize: 13, color: 'var(--dim)' }}>La repetirás al final.</div>}
+          <button className={answer ? 'btn gold block' : 'btn block'} onClick={next}>
+            Continuar
+          </button>
+        </div>
       )}
     </main>
   );

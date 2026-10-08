@@ -1,6 +1,8 @@
 // Minijuegos: generadores puros a partir de las tarjetas de un estudio.
 
-export type Card0 = { id: string; front: string; back: string };
+import { pickDistractors, pickWrong } from './distractors';
+
+export type Card0 = { id: string; front: string; back: string; wrong?: string[] };
 
 function shuffle<T>(xs: T[], rnd: () => number): T[] {
   const a = xs.slice();
@@ -81,8 +83,8 @@ export function buildTrueFalse(cards: Card0[], n = 30, rnd: () => number = Math.
   for (let k = 0; k < n; k++) {
     const c = pool[Math.floor(rnd() * pool.length)];
     const truth = rnd() < 0.5;
-    const other = shuffle(pool.filter((x) => x.id !== c.id), rnd)[0];
-    out.push({ front: c.front, shown: truth ? c.back : other.back, truth, correct: c.back });
+    const other = pickWrong(c.back, c.wrong, pool.filter((x) => x.id !== c.id).map((x) => x.back), rnd) ?? c.back;
+    out.push({ front: c.front, shown: truth ? c.back : other, truth: truth || other === c.back, correct: c.back });
   }
   return out;
 }
@@ -130,12 +132,12 @@ export function buildMixed(cards: Card0[], n = 10, rnd: () => number = Math.rand
     }
     const c = pool[Math.floor(rnd() * pool.length)];
     if (kind === 'choice') {
-      const options = shuffle([c.back, ...shuffle(pool.filter((x) => x.id !== c.id), rnd).slice(0, 3).map((x) => x.back)], rnd);
+      const options = shuffle([c.back, ...pickDistractors(c.back, c.wrong, pool.filter((x) => x.id !== c.id).map((x) => x.back), 3, rnd)], rnd);
       rounds.push({ kind, prompt: c.front, options, answer: options.indexOf(c.back) });
     } else if (kind === 'truefalse') {
       const truth = rnd() < 0.5;
-      const other = shuffle(pool.filter((x) => x.id !== c.id), rnd)[0];
-      rounds.push({ kind, prompt: c.front, shown: truth ? c.back : other.back, truth, correct: c.back });
+      const other = pickWrong(c.back, c.wrong, pool.filter((x) => x.id !== c.id).map((x) => x.back), rnd) ?? c.back;
+      rounds.push({ kind, prompt: c.front, shown: truth ? c.back : other, truth: truth || other === c.back, correct: c.back });
     } else rounds.push({ kind, prompt: c.back, expected: c.front });
   }
   return rounds;

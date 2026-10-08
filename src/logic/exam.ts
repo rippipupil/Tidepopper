@@ -1,3 +1,4 @@
+import { pickWrong } from './distractors';
 import { buildQuiz } from './quiz';
 import { streakMultiplier } from './rewards';
 
@@ -18,7 +19,7 @@ function shuffle<T>(xs: T[], rnd: () => number): T[] {
 }
 
 /** Examen sin IA a partir de las tarjetas: 7 de cada 10 tipo test y el resto verdadero/falso. */
-export function buildQuickExam(cards: { id: string; front: string; back: string }[], n = 10, rnd: () => number = Math.random): ExamQuestion[] {
+export function buildQuickExam(cards: { id: string; front: string; back: string; wrong?: string[] }[], n = 10, rnd: () => number = Math.random): ExamQuestion[] {
   const quiz = buildQuiz(cards, n, rnd);
   if (quiz.length === 0) return [];
   const backs = Array.from(new Set(cards.map((c) => c.back)));
@@ -26,7 +27,7 @@ export function buildQuickExam(cards: { id: string; front: string; back: string 
     if (k % 10 < 7) return { kind: 'choice', prompt: `¿Qué es «${q.prompt}»?`, options: q.options, answer: q.answer };
     const correct = q.options[q.answer];
     const truth = rnd() < 0.5;
-    const wrong = shuffle(backs.filter((b) => b !== correct), rnd)[0];
+    const wrong = pickWrong(correct, cards.find((c) => c.id === q.cardId)?.wrong, backs, rnd) ?? shuffle(backs.filter((b) => b !== correct), rnd)[0];
     return {
       kind: 'truefalse',
       prompt: q.prompt,

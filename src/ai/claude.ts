@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { structured, text, type AiKeys, type AiPart } from './engine';
+import type { LevelContent } from '../data/types';
+import { cleanSteps, lessonText, quizOf } from '../logic/lesson';
 
 // Tareas de la IA. Cada una se resuelve con la primera IA disponible: Claude,
 // Gemini, Groq o, sin claves, copiar y pegar en la app de Claude (ver engine.ts).
@@ -9,7 +11,7 @@ export type { AiKeys, AiPart, ProviderId } from './engine';
 const StudyPack = z.object({
   summary: z.string().describe('Resumen claro en español, en párrafos cortos, de lo esencial de las fuentes'),
   cards: z
-    .array(z.object({ front: z.string().describe('Término o pregunta breve'), back: z.string().describe('Definición o respuesta, 1-2 frases') }))
+    .array(z.object({ front: z.string().describe('Término o pregunta breve'), back: z.string().describe('Definición o respuesta, 1-2 frases'), wrong: z.array(z.string()).describe('3 respuestas INCORRECTAS pero muy creíbles, del mismo tipo, formato y longitud que «back» y del mismo tema (si «back» es una letra, otras letras; si es una fecha, otras fechas cercanas; si es una definición, la de un concepto parecido con el que se suele confundir)') }))
     .describe('Entre 8 y 40 tarjetas de repaso, de lo más importante a lo menos'),
 });
 export type StudyPack = z.infer<typeof StudyPack>;
@@ -22,7 +24,8 @@ export function generateStudyPack(keys: AiKeys, studyName: string, parts: AiPart
     effort: 'medium',
     system:
       'Eres un profesor que prepara material de estudio en español. Usa solo lo que dicen las fuentes del alumno. ' +
-      'Las tarjetas deben poder responderse sin ver las fuentes: un término o pregunta concreta delante, y detrás una respuesta corta y exacta.',
+      'Las tarjetas deben poder responderse sin ver las fuentes: un término o pregunta concreta delante, y detrás una respuesta corta y exacta. ' +
+      'Para cada tarjeta, escribe también respuestas incorrectas que de verdad se puedan confundir con la buena: mismo formato y tema, errores típicos de un alumno.',
     parts,
     user: `Prepara el material para el estudio «${studyName}».`,
   });
@@ -81,7 +84,8 @@ export async function generateExam(keys: AiKeys, studyName: string, summary: str
     effort: 'medium',
     system:
       'Eres un profesor que pone exámenes justos en español. Pregunta solo por lo que está en el material del alumno. ' +
-      'Las opciones incorrectas deben ser plausibles, no absurdas. Mezcla preguntas de memoria con otras de comprender y relacionar.',
+      'Las opciones incorrectas deben ser del mismo tipo y formato que la correcta y confundirse con ella (conceptos vecinos, errores típicos, cifras cercanas); nunca absurdas ni de otro tema. ' +
+      'Mezcla preguntas de memoria con otras de comprender, aplicar y relacionar ideas.',
     user: `Pon un examen del tema «${studyName}» con este material:\n\n${material}`,
   });
   return out.questions.filter((q) => (q.type === 'choice' ? q.options.length >= 2 && q.answer >= 0 && q.answer < q.options.length : q.prompt.trim().length > 0));
@@ -127,17 +131,28 @@ export async function generateCourseOutline(keys: AiKeys, topic: string, goal: s
   return { ...out, levels: out.levels.slice(0, levels) };
 }
 
-const Level = z.object({
-  lesson: z.string().describe('Lección clara en español, 3-6 párrafos cortos separados por una línea en blanco, con ejemplos'),
-  keyPoints: z.array(z.string()).describe('3-5 ideas clave, una frase cada una'),
-  cards: z.array(z.object({ front: z.string(), back: z.string() })).describe('5-8 tarjetas de repaso del nivel'),
-  quiz: z
-    .array(z.object({ prompt: z.string(), options: z.array(z.string()).describe('4 opciones'), answer: z.number().int().describe('Índice 0-3 de la correcta'), explanation: z.string() }))
-    .describe('6 preguntas tipo test sobre la lección'),
+const Step = z.object({
+  type: z
+    .enum(['explica', 'elige', 'vf', 'hueco', 'ordena', 'parejas', 'escribe'])
+    .describe('explica = idea corta; elige = test; vf = verdadero o falso; hueco = completar la frase; ordena = poner en orden; parejas = unir; escribe = escribir la respuesta'),
+  emoji: z.string().describe('Un emoji que ilustre el paso'),
+  text: z.string().describe('explica: la idea en 1-3 frases cortas (máx. 250 caracteres). Ejercicios: el enunciado; en «hueco», la frase con ___ donde va la palabra'),
+  example: z.string().describe('explica: un ejemplo concreto o una analogía de la vida real, una frase; en los demás, vacío'),
+  options: z.array(z.string()).describe('elige: 3-4 opciones; hueco: 3-4 palabras posibles; ordena: 3-5 elementos EN EL ORDEN CORRECTO; demás: vacío'),
+  answer: z.number().int().describe('elige y hueco: índice de la correcta; vf: 1 si la frase es verdadera y 0 si es falsa; demás: -1'),
+  pairs: z.array(z.object({ a: z.string(), b: z.string() })).describe('parejas: 3-4 parejas (término y su pareja, cortos); demás: vacío'),
+  accepted: z.array(z.string()).describe('escribe: respuestas válidas de 1-3 palabras; demás: vacío'),
+  explanation: z.string().describe('Ejercicios: por qué es así, una frase corta y animada; explica: vacío'),
 });
-export type GeneratedLevel = z.infer<typeof Level>;
 
-/** Escribe la lección, las tarjetas y la práctica de un nivel. */
+const Level = z.object({
+  steps: z.array(Step).describe('Entre 10 y 14 pasos alternando ideas cortas y ejercicios'),
+  keyPoints: z.array(z.string()).describe('3-5 ideas clave del nivel, una frase cada una'),
+  cards: z.array(z.object({ front: z.string(), back: z.string(), wrong: z.array(z.string()).describe('3 respuestas INCORRECTAS pero muy creíbles, del mismo tipo, formato y longitud que «back» y del mismo tema (si «back» es una letra, otras letras; si es una fecha, otras fechas cercanas; si es una definición, la de un concepto parecido con el que se suele confundir)') })).describe('5-8 tarjetas de repaso del nivel'),
+});
+export type GeneratedLevel = LevelContent;
+
+/** Escribe la lección interactiva de un nivel: ideas cortas, ejercicios variados y tarjetas. */
 export async function generateLevelContent(
   keys: AiKeys,
   course: { topic: string; goal: string; start: keyof typeof START_TEXT; levels: { title: string; goal: string }[] },
@@ -149,11 +164,19 @@ export async function generateLevelContent(
     maxTokens: 16000,
     effort: 'medium',
     system:
-      'Eres un profesor paciente que escribe en español sencillo. Explica solo lo de este nivel, apoyándote en lo que ya se vio en los anteriores. ' +
-      'Las preguntas de la práctica deben poder responderse con la lección, y sus opciones incorrectas deben ser creíbles.',
-    user: `Curso: ${course.topic}\nObjetivo: ${course.goal || 'aprenderlo bien'}\nEl alumno ${START_TEXT[course.start]}.\n\nTemario:\n${plan}\n\nEscribe el nivel ${index + 1}.`,
+      'Diseñas lecciones interactivas en español al estilo Duolingo o Brilliant: se aprende haciendo, no leyendo. Reglas:\n' +
+      '- Entre 10 y 14 pasos. El primero es un gancho: una pregunta curiosa, un reto o un dato sorprendente sobre el tema.\n' +
+      '- Nunca dos «explica» seguidos. Cada «explica» trae una sola idea en 1-3 frases cortas y un ejemplo concreto o una analogía de la vida real.\n' +
+      '- Después de cada idea nueva, un ejercicio que la practique enseguida. Al menos 7 ejercicios y al menos 4 tipos distintos.\n' +
+      '- Las opciones incorrectas son del mismo tipo y formato que la correcta y se confunden con ella: conceptos vecinos, errores típicos, valores cercanos. Si la respuesta es una letra, las otras opciones son letras; nunca opciones absurdas o de otro tema.\n' +
+      '- Haz pensar: además de recordar, pide aplicar la idea a un caso nuevo, comparar dos conceptos parecidos o detectar un error.\n' +
+      '- En «hueco», la frase lleva ___ y las opciones son palabras sueltas.\n' +
+      '- El último paso es un ejercicio que mezcla todo lo del nivel.\n' +
+      '- Tono cercano y animado, tuteando, español sencillo. Explica solo lo de este nivel, apoyándote en los anteriores.',
+    user: `Curso: ${course.topic}\nObjetivo: ${course.goal || 'aprenderlo bien'}\nEl alumno ${START_TEXT[course.start]}.\n\nTemario:\n${plan}\n\nCrea la lección del nivel ${index + 1}.`,
   });
-  return { ...out, quiz: out.quiz.filter((q) => q.options.length >= 2 && q.answer >= 0 && q.answer < q.options.length) };
+  const steps = cleanSteps(out.steps);
+  return { steps, keyPoints: out.keyPoints, cards: out.cards, lesson: lessonText(steps), quiz: quizOf(steps) };
 }
 
 /** Responde en el chat del asistente sobre un estudio concreto. */

@@ -20,11 +20,34 @@ export interface LevelQuestion {
   explanation: string;
 }
 
+/** Tipos de paso de una lección interactiva: explicaciones cortas y ejercicios. */
+export type StepType = 'explica' | 'elige' | 'vf' | 'hueco' | 'ordena' | 'parejas' | 'escribe';
+
+export interface LessonStep {
+  type: StepType;
+  emoji: string;
+  /** explica: la idea; ejercicios: el enunciado (en «hueco», con ___ donde va la palabra). */
+  text: string;
+  /** explica: un ejemplo o analogía. */
+  example: string;
+  /** elige y hueco: opciones; ordena: elementos en el orden correcto. */
+  options: string[];
+  /** elige y hueco: índice de la correcta; vf: 1 verdadero, 0 falso. */
+  answer: number;
+  pairs: { a: string; b: string }[];
+  /** escribe: respuestas válidas. */
+  accepted: string[];
+  /** Por qué es así, tras responder. */
+  explanation: string;
+}
+
 export interface LevelContent {
   lesson: string;
   keyPoints: string[];
-  cards: { front: string; back: string }[];
+  cards: { front: string; back: string; wrong?: string[] }[];
   quiz: LevelQuestion[];
+  /** Lección interactiva paso a paso (los niveles antiguos no la tienen). */
+  steps?: LessonStep[];
 }
 
 export interface CourseLevel {
@@ -77,6 +100,8 @@ export interface Card {
   studyId: string;
   front: string;
   back: string;
+  /** Respuestas incorrectas pero creíbles que escribió la IA, para los señuelos. */
+  wrong?: string[];
   createdAt: number;
   sched: Schedule;
 }
