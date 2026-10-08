@@ -23,7 +23,7 @@ A partir de ese material, la app crea flashcards, resúmenes, tests y **minijueg
 
 ## Diseños
 Hay tres direcciones visuales para elegir: A · Consola LCD, B · Marea y C · Niebla.
-Están en el lienzo de Claude Design (enlace privado de Pablo).
+Están en el lienzo de Claude Design (enlace privado).
 
 ## Pendiente
 - Elegir dirección visual.
