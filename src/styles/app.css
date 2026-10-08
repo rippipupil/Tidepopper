@@ -23,6 +23,8 @@ body {
   background-color: var(--night);
   background-image: radial-gradient(rgba(143,184,214,0.13) 1px, transparent 1.5px); background-size: 12px 12px;
   -webkit-tap-highlight-color: transparent;
+  /* Pixelify Sans dibuja «fi» como una ligadura que parece una A («PerAl»). */
+  font-variant-ligatures: none;
 }
 img { image-rendering: pixelated; }
 a { color: var(--glow); }
