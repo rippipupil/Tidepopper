@@ -19,7 +19,16 @@ ICONS = {
 'check': ["............","............","..........K.",".........KMK","........KMK.","..K....KMK..",".KMK..KMK...","..KMKKMK....","...KMMK.....","....KK......","............","............"],
 }
 PAL['M'] = '#8cc5b0'
-for name, rows in ICONS.items():
+
+FOLDER = ["................","................","..KKKKK.........",".KhhhhhK........",".KhFFFFhKKKKKK..",".KhhhhhhhhhhhhK.",".KhFFFFFFFFFFfKZ",".KhFFFFFFFFFFfKZ",".KhFFFFFFFFFFfKZ",".KhFFFFFFFFFFfKZ",".KhFFFFFFFFFFfKZ",".KhFFFFFFFFFFfKZ",".KffffffffffffKZ",".KKKKKKKKKKKKKKZ","..ZZZZZZZZZZZZZZ","................"]
+for k, v in {'folder-blue':('#8fb8d6','#b4d4ea','#5f8fb3'),'folder-mint':('#8cc5b0','#b6dccd','#5f9884'),'folder-gold':('#d9c08a','#ecdcb5','#a88f5e'),'folder-coral':('#d4907f','#e6b5a8','#a8695a')}.items():
+    ICONS[k] = (FOLDER, {'F':v[0],'h':v[1],'f':v[2]})
+ICONS['cards'] = ["................","......KKKKKKKK..","......KCCCCCCK..","......KCCCCCCKZ.","..KKKKKKKKKCCKZ.","..KWWWWWWWKCCKZ.","..KWPPPPPSKCCKZ.","..KWPBBBPSKCCKZ.","..KWPPPPPSKKKKZ.","..KWPBBPPSKZZZ..","..KWPPPPPSKZ....","..KWPPPPPSKZ....","..KSSSSSSSKZ....","..KKKKKKKKKZ....","...ZZZZZZZZZ....","................"]
+ICONS['timer'] = ["................","..KKKKKKKKKKKK..","..KDDDDDDDDDDK..","...KWAAAAAAK....","...KWGGGGGGK....","....KWGGGGK.....",".....KWGGK......","......KGGK......",".....KWAAK......","....KWAGAAK.....","...KWAGGGAAK....","...KWGGGGGGK....","..KDDDDDDDDDDKZ.","..KKKKKKKKKKKKZ.","...ZZZZZZZZZZZZ.","................"]
+ICONS['folder-nav'] = ["............","............",".AAAA.......",".AAAAAAAAAA.","............",".AAAAAAAAAA.",".AAAAAAAAAA.",".AAAAAAAAAA.",".AAAAAAAAAA.",".DDDDDDDDDD.","............","............"]
+for name, entry in ICONS.items():
+    rows, ov = entry if isinstance(entry, tuple) else (entry, {})
+    pal = {**PAL, **ov}
     n = len(rows); w = len(rows[0])
     for i, r in enumerate(rows):
         if len(r) != w: print('WIDTH', name, i, len(r), repr(r))
@@ -31,7 +40,7 @@ for name, rows in ICONS.items():
             if c == '.': x += 1; continue
             x2 = x
             while x2 < w and r[x2] == c: x2 += 1
-            col = PAL[c]
+            col = pal[c]
             if isinstance(col, tuple):
                 out.append(f'<rect x="{x}" y="{y}" width="{x2-x}" height="1" fill="{col[0]}" fill-opacity="{col[1]}"/>')
             else:

@@ -15,6 +15,12 @@ A partir de ese material, la app crea flashcards, resúmenes, tests y **minijueg
 - **Paleta:** azul claro, celeste y blanco, en tonos suaves y algo oscuros, nada chillones.
 - **Icono:** un documento en pixel art.
 
+## Estructura de la app
+- **Inicio:** continuar donde lo dejaste, los dos modos (documentos y asistente IA) y tus estudios.
+- **Mis estudios:** carpetas de colores, una por estudio, que llevan a ese estudio.
+- **Un estudio:** "hoy toca", formas de estudiar (flashcards, resumen, contrarreloj, explícalo tú) y sus fuentes.
+- **Barra inferior:** Inicio · Estudios · Añadir · Perfil.
+
 ## Minijuegos (primeras ideas)
 - **Contrarreloj:** aparece un término y eliges el concepto correcto antes de que se acabe el tiempo.
 - **Explícalo tú:** escribes sobre un concepto y la IA te corrige: qué está bien, qué falta y qué es un error.
