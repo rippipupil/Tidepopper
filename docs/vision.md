@@ -22,10 +22,9 @@ A partir de ese material, la app crea flashcards, resúmenes, tests y **minijueg
 - **Jefe final:** examen que mezcla todo el tema y se desbloquea al llegar a cierto dominio.
 
 ## Diseños
-Hay tres direcciones visuales para elegir: A · Consola LCD, B · Marea y C · Niebla.
+**Elegida: A · Consola LCD** (oscura, paneles pixel en relieve y pantallas LCD), con pantallas simplificadas: botones grandes con icono y una sola acción principal por pantalla.
 Están en el lienzo de Claude Design (enlace privado).
 
 ## Pendiente
-- Elegir dirección visual.
 - Más brainstorming de minijuegos y del flujo del asistente IA.
 - Tecnología: PWA, app nativa o ambas; dónde se guardan los datos; inicio de sesión.
