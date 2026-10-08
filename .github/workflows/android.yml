@@ -71,8 +71,18 @@ jobs:
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
           "$BUILD_TOOLS/zipalign" -f -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
           if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            # Al copiar desde el móvil se suelen colar espacios y saltos de línea: se quitan.
+            B64=$(printf '%s' "$KEYSTORE_BASE64" | tr -d ' \t\r\n')
+            KEYSTORE_PASSWORD=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d ' \t\r\n')
+            if ! printf '%s' "$B64" | base64 -d > "$RUNNER_TEMP/release.keystore" 2>/dev/null; then
+              echo "::error::RELEASE_KEYSTORE_BASE64 no es base64 válido (${#B64} caracteres sin espacios; empieza por '${B64:0:3}'). Debe ser solo el texto largo del archivo de secretos, sin el resto del archivo."
+              exit 1
+            fi
             ALIAS="${KEY_ALIAS:-tidepopper}"
+            if ! keytool -list -keystore "$RUNNER_TEMP/release.keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$ALIAS" > /dev/null 2>&1; then
+              echo "::error::No se puede abrir la clave: revisa RELEASE_KEYSTORE_PASSWORD (y RELEASE_KEY_ALIAS si lo has puesto)."
+              exit 1
+            fi
             echo "official=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::Faltan los secretos RELEASE_KEYSTORE_BASE64 y RELEASE_KEYSTORE_PASSWORD: el APK se firma con una clave temporal y no se publica en Releases. Consulta el README (sección 'Firma del APK')."
