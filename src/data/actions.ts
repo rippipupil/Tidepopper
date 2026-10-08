@@ -1,4 +1,6 @@
-import type { AppState, Card, ExamRecord, FolderColor, Grade, Source, Study } from './types';
+import type { AppState, Card, ChatMsg, Course, ExamRecord, FolderColor, Grade, LevelContent, Source, Study } from './types';
+import { completeLevel } from '../logic/course';
+import { collectMine, labUpgradeCost, maybeRaid, SESSION_SPEEDUP, settleUpgrades, speedUp, startUpgrade } from '../logic/economy';
 import { examReward } from '../logic/exam';
 import { memory, newSchedule, overdue, review } from '../logic/srs';
 import { applyReward, attackLoot, dayKey, sessionReward, startAttack, touchStreak, trainTroops, type Reward } from '../logic/rewards';
@@ -11,6 +13,7 @@ export function initialState(): AppState {
     sources: [],
     cards: [],
     exams: [],
+    chats: {},
     wallet: { coins: 300, gems: 0, xp: 0 },
     village: startingVillage(),
     streak: { lastDay: '', days: 0 },
@@ -70,7 +73,7 @@ export function finishSession(s: AppState, correct: number, total: number, now: 
   const reward = sessionReward({ correct, total }, streak.days);
   return {
     reward,
-    state: { ...s, streak, wallet: applyReward(s.wallet, reward), village: trainTroops(s.village, correct) },
+    state: { ...s, streak, wallet: applyReward(s.wallet, reward), village: settleUpgrades(speedUp(trainTroops(s.village, correct), SESSION_SPEEDUP), now) },
   };
 }
 
@@ -86,10 +89,10 @@ export function cracks(s: AppState, now: number): number {
   return overdue(s.cards, now).length;
 }
 
-export function build(s: AppState, type: string, i: number, j: number, id: string): { state: AppState; error: BuildError | null } {
+export function build(s: AppState, type: string, i: number, j: number, id: string, now = Date.now()): { state: AppState; error: BuildError | null } {
   const error = canBuild(s.village.buildings, s.wallet.coins, type, i, j);
   if (error) return { state: s, error };
-  const placed = { id, type, i, j, level: 1 };
+  const placed = { id, type, i, j, level: 1, collectedAt: type === 'mina' ? now : undefined };
   return {
     error: null,
     state: { ...s, wallet: { ...s.wallet, coins: s.wallet.coins - CATALOG[type].cost }, village: { ...s.village, buildings: [...s.village.buildings, placed] } },
@@ -129,10 +132,94 @@ export function finishExam(s: AppState, record: ExamRecord, now: number): { stat
   const reward = examReward(record.score, streak.days);
   return {
     reward,
-    state: { ...s, streak, exams: [...s.exams, record], wallet: applyReward(s.wallet, reward), village: trainTroops(s.village, record.correct) },
+    state: { ...s, streak, exams: [...s.exams, record], wallet: applyReward(s.wallet, reward), village: settleUpgrades(speedUp(trainTroops(s.village, record.correct), SESSION_SPEEDUP), now) },
   };
 }
 
 export function studyExams(s: AppState, studyId: string): ExamRecord[] {
   return s.exams.filter((e) => e.studyId === studyId).sort((a, b) => b.at - a.at);
+}
+
+// ---------- Asistente IA: cursos por niveles ----------
+
+export function createCourse(s: AppState, id: string, name: string, course: Course, now: number): AppState {
+  const study: Study = { id, name, color: 'mint', createdAt: now, course, summary: course.description };
+  return { ...s, studies: [...s.studies, study] };
+}
+
+function mapCourse(s: AppState, studyId: string, fn: (c: Course, st: Study) => Partial<Study>): AppState {
+  return { ...s, studies: s.studies.map((x) => (x.id === studyId && x.course ? { ...x, ...fn(x.course, x) } : x)) };
+}
+
+/** Guarda la lección generada de un nivel y la añade al resumen del estudio. */
+export function setLevelContent(s: AppState, studyId: string, i: number, content: LevelContent): AppState {
+  return mapCourse(s, studyId, (c, st) => ({
+    course: { ...c, levels: c.levels.map((l, k) => (k === i ? { ...l, content } : l)) },
+    summary: `${st.summary ?? ''}\n\nNivel ${i + 1}: ${c.levels[i].title}\n${content.lesson}`.trim(),
+  }));
+}
+
+/** Termina la práctica de un nivel: estrellas, recompensa y, al aprobar la primera vez, sus tarjetas pasan al repaso. */
+export function finishLevel(s: AppState, studyId: string, i: number, correct: number, total: number, now: number, ids: () => string) {
+  const st = s.studies.find((x) => x.id === studyId);
+  if (!st?.course) return { state: s, reward: null, passed: false, stars: 0 };
+  const pct = total ? Math.round((100 * correct) / total) : 0;
+  const r = completeLevel(st.course, i, pct);
+  let next = mapCourse(s, studyId, () => ({ course: r.course }));
+  const lv = r.course.levels[i];
+  if (r.passed && !lv.cardsAdded && lv.content) {
+    next = addCards(next, studyId, lv.content.cards, now, ids);
+    next = mapCourse(next, studyId, (c) => ({ course: { ...c, levels: c.levels.map((l, k) => (k === i ? { ...l, cardsAdded: true } : l)) } }));
+  }
+  const done = finishSession(next, correct, total, now);
+  return { state: done.state, reward: done.reward, passed: r.passed, stars: r.stars };
+}
+
+export function addChat(s: AppState, studyId: string, msg: ChatMsg): AppState {
+  const list = [...(s.chats[studyId] ?? []), msg].slice(-40);
+  return { ...s, chats: { ...s.chats, [studyId]: list } };
+}
+
+export function clearChat(s: AppState, studyId: string): AppState {
+  const chats = { ...s.chats };
+  delete chats[studyId];
+  return { ...s, chats };
+}
+
+// ---------- Aldea: obras, mina, laboratorio y Niebla ----------
+
+export function upgradeBuilding(s: AppState, id: string, now: number): AppState {
+  const r = startUpgrade(s.village, s.wallet.coins, id, now);
+  return r ? { ...s, village: r.village, wallet: { ...s.wallet, coins: s.wallet.coins - r.cost } } : s;
+}
+
+export function collect(s: AppState, id: string, now: number): { state: AppState; coins: number } {
+  const r = collectMine(s.village, id, now, s.streak.lastDay === dayKey(now));
+  return { coins: r.coins, state: r.coins ? { ...s, village: r.village, wallet: { ...s.wallet, coins: s.wallet.coins + r.coins } } : s };
+}
+
+export function upgradeLab(s: AppState): AppState {
+  const cost = labUpgradeCost(s.village.labLevel);
+  if (cost === null || s.wallet.gems < cost || !s.village.buildings.some((b) => b.type === 'laboratorio')) return s;
+  return { ...s, wallet: { ...s.wallet, gems: s.wallet.gems - cost }, village: { ...s.village, labLevel: s.village.labLevel + 1 } };
+}
+
+/** Fuerza media de las defensas (0–100). Una defensa sin estudio o sin tarjetas cuenta como 0. */
+export function defensePower(s: AppState, now: number): number {
+  const defs = s.village.buildings.filter((b) => CATALOG[b.type].defense);
+  if (defs.length === 0) return 0;
+  const sum = defs.reduce((acc, b) => acc + (b.studyId ? (studyMemory(s, b.studyId, now) ?? 0) : 0), 0);
+  return Math.round(sum / defs.length);
+}
+
+/** Al abrir la app: termina obras y, si toca, la Niebla ataca. */
+export function daily(s: AppState, now: number): AppState {
+  const settled = settleUpgrades(s.village, now);
+  const r = maybeRaid(settled, s.wallet.coins, dayKey(now), cracks(s, now), defensePower(s, now));
+  if (r.village === s.village) return s;
+  return { ...s, village: r.village, wallet: { ...s.wallet, coins: s.wallet.coins - r.stolen } };
+}
+
+export function markRaidSeen(s: AppState): AppState {
+  return s.village.raid ? { ...s, village: { ...s.village, raid: { ...s.village.raid, seen: true } } } : s;
 }

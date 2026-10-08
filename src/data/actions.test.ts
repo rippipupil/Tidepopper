@@ -60,3 +60,65 @@ describe('acciones', () => {
     expect(deleteStudy(s, 'h').exams).toHaveLength(0);
   });
 });
+
+import { addChat, createCourse, daily, defensePower, finishLevel, setLevelContent, upgradeBuilding } from './actions';
+import { newLevel } from '../logic/course';
+
+describe('cursos, chat y aldea', () => {
+  const content = { lesson: 'El morse usa puntos y rayas.', keyPoints: ['E = ·'], cards: [{ front: 'E', back: '·' }, { front: 'T', back: '−' }], quiz: [] };
+  const course = { topic: 'Morse', goal: '', start: 'cero' as const, description: 'Curso de morse', levels: [newLevel('Letras E y T', ''), newLevel('A e I', '')] };
+
+  it('aprobar un nivel lo completa, añade sus tarjetas una sola vez y paga', () => {
+    let s = createCourse(initialState(), 'm', 'Código morse', course, now);
+    s = setLevelContent(s, 'm', 0, content);
+    expect(s.studies[0].summary).toContain('El morse usa puntos y rayas.');
+    const r = finishLevel(s, 'm', 0, 5, 6, now, ids);
+    expect(r.passed).toBe(true);
+    expect(r.state.cards).toHaveLength(2);
+    expect(r.state.studies[0].course!.levels[0].done).toBe(true);
+    const again = finishLevel(r.state, 'm', 0, 6, 6, now, ids);
+    expect(again.state.cards).toHaveLength(2);
+    expect(again.state.studies[0].course!.levels[0].stars).toBe(3);
+  });
+
+  it('el chat guarda como mucho 40 mensajes por estudio', () => {
+    let s = initialState();
+    for (let k = 0; k < 45; k++) s = addChat(s, 'x', { role: 'user', text: `m${k}`, at: k });
+    expect(s.chats.x).toHaveLength(40);
+    expect(s.chats.x[0].text).toBe('m5');
+  });
+
+  it('las obras cuestan monedas y una sesión de estudio las acelera', () => {
+    const s0 = { ...initialState(), wallet: { coins: 2000, gems: 0, xp: 0 } };
+    const s1 = upgradeBuilding(s0, 'th', now);
+    expect(s1.wallet.coins).toBe(2000 - 750);
+    // La primera obra del ayuntamiento dura 20 min: una sesión (−30 min) la termina.
+    expect(s1.village.buildings.find((b) => b.id === 'th')!.upgradeUntil).toBe(now + 20 * 60_000);
+    const s2 = finishSession(s1, 1, 1, now + 60_000).state;
+    const th = s2.village.buildings.find((b) => b.id === 'th')!;
+    expect(th.level).toBe(2);
+    expect(th.upgradeUntil).toBeUndefined();
+  });
+
+  it('la Niebla roba al día siguiente si hay grietas y defensas débiles', () => {
+    let s = createStudy(initialState(), 'Bio', 'blue', now, 'b');
+    s = addCards(s, 'b', [{ front: 'a', back: 'b' }], now, ids);
+    s = gradeCard(s, s.cards[0].id, 'good', now);
+    s = daily(s, now);
+    expect(s.village.lastRaidDay).not.toBe('');
+    const later = now + 3 * 86_400_000;
+    expect(defensePower(s, later)).toBe(0);
+    const after = daily(s, later);
+    expect(after.village.raid!.stolen).toBe(6);
+    expect(after.wallet.coins).toBe(300 - 6);
+  });
+});
+
+describe('mina recién construida', () => {
+  it('empieza a producir desde que se construye', async () => {
+    const { mineAvailable } = await import('../logic/economy');
+    const s = build({ ...initialState(), wallet: { coins: 1000, gems: 0, xp: 0 } }, 'mina', 12, 12, 'm', now).state;
+    const m = s.village.buildings.find((b) => b.id === 'm')!;
+    expect(mineAvailable(m, now + 2 * 3_600_000)).toBe(30);
+  });
+});

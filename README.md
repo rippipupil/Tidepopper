@@ -4,6 +4,12 @@ App de estudio personal (web y móvil) en pixel art 3D. Estudias con tus propios
 
 ## Qué hace ya
 
+- **Asistente IA con cursos por niveles:**
+  - Le dices un tema (por ejemplo, código morse), tu nivel y para qué lo quieres, y Claude diseña un curso de 4 a 12 niveles.
+  - Cada nivel tiene una lección, ideas clave y una práctica con 20 segundos por pregunta.
+  - Con un 60 % pasas, con estrellas según la nota, y se abre el siguiente nivel.
+  - Las tarjetas de cada nivel aprobado pasan a tu repaso.
+- **Chat con el asistente:** en cualquier estudio o curso, pregúntale lo que quieras. Responde con tu material delante. «Explícamelo mejor» en las flashcards también abre el chat.
 - **Mis estudios:** carpetas de colores, una por tema.
 - **Añadir apuntes:** PDF, fotos (de la cámara o la galería), texto pegado o tarjetas a mano. La IA (Claude) lee los PDF y las fotos directamente y crea un **resumen** y **tarjetas de repaso**.
 - **Flashcards con repetición espaciada:** cada tarjeta vuelve justo antes de que la olvides (*No la sabía · Dudé · La sabía*).
@@ -19,6 +25,13 @@ App de estudio personal (web y móvil) en pixel art 3D. Estudias con tus propios
   - Construyes cañones, torres de arqueras, catapultas, ballestas, muros, minas… y los colocas o mueves donde quieras.
   - Cada defensa se alimenta de un estudio, y su fuerza es lo que recuerdas de él.
   - Las tarjetas sin repasar son **grietas** por donde entra la Niebla del Olvido.
+- **Obras y mejoras:**
+  - Cada edificio sube de nivel con monedas y tiempo de obra, como mucho un nivel por encima del ayuntamiento.
+  - Cada cabaña es un constructor.
+  - **Cada sesión de estudio acelera las obras 30 min.**
+- **Mina:** produce monedas cada hora, pero solo se puede vaciar los días que estudias.
+- **Laboratorio:** con cristales, tus tropas destruyen más en los ataques.
+- **La Niebla del Olvido:** cada día nuevo, si tienes tarjetas sin repasar, ataca. Roba más cuanto más débiles sean tus defensas, y los muros ayudan. Te deja un informe.
 - **Ataques:** máximo **2 al día**. Cada pregunta de repaso acertada lanza una arquera, y el botín depende de lo que destruyas.
 - **Perfil:** clave de Claude y copia de seguridad (descargar y restaurar).
 

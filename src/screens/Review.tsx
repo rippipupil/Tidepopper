@@ -72,6 +72,9 @@ export default function Review({ id }: { id: string }) {
           <>
             <div style={{ height: 4, background: 'repeating-linear-gradient(90deg, var(--paper-sh) 0 8px, transparent 8px 12px)' }} />
             <p style={{ margin: 0, fontSize: 17, lineHeight: 1.55 }}>{card.back}</p>
+            <a href={`#/estudio/${id}/chat?q=${encodeURIComponent(`Explícame mejor «${card.front}»: ${card.back}`)}`} style={{ marginTop: 'auto', fontSize: 14, fontWeight: 600, color: 'var(--blue-sh)' }}>
+              Explícamelo mejor
+            </a>
           </>
         ) : (
           <button className="btn" style={{ marginTop: 'auto' }} onClick={() => setShown(true)}>

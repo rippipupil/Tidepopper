@@ -9,6 +9,45 @@ export interface Study {
   createdAt: number;
   examDate?: string; // AAAA-MM-DD
   summary?: string;
+  course?: Course; // solo en los estudios creados por el asistente IA
+}
+
+export interface LevelQuestion {
+  prompt: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+}
+
+export interface LevelContent {
+  lesson: string;
+  keyPoints: string[];
+  cards: { front: string; back: string }[];
+  quiz: LevelQuestion[];
+}
+
+export interface CourseLevel {
+  title: string;
+  goal: string;
+  done: boolean;
+  stars: number; // 0–3, la mejor conseguida
+  best: number; // mejor % de aciertos
+  cardsAdded: boolean;
+  content?: LevelContent;
+}
+
+export interface Course {
+  topic: string;
+  goal: string;
+  start: 'cero' | 'basico' | 'avanzado';
+  description: string;
+  levels: CourseLevel[];
+}
+
+export interface ChatMsg {
+  role: 'user' | 'assistant';
+  text: string;
+  at: number;
 }
 
 export type SourceKind = 'pdf' | 'image' | 'text';
@@ -56,6 +95,16 @@ export interface Placed {
   j: number;
   level: number;
   studyId?: string; // defensas: estudio que las alimenta
+  upgradeUntil?: number; // en obras hasta (ms)
+  collectedAt?: number; // minas: última recogida (ms)
+}
+
+export interface RaidReport {
+  day: string;
+  cracks: number;
+  defense: number; // 0–100
+  stolen: number;
+  seen: boolean;
 }
 
 export interface Village {
@@ -64,6 +113,9 @@ export interface Village {
   attacksUsed: number;
   troops: number;
   correctSinceTroop: number;
+  labLevel: number; // 1–5: fuerza de las tropas
+  lastRaidDay: string;
+  raid: RaidReport | null;
 }
 
 export interface Streak {
@@ -91,6 +143,7 @@ export interface AppState {
   sources: Source[];
   cards: Card[];
   exams: ExamRecord[];
+  chats: Record<string, ChatMsg[]>; // por estudio
   wallet: Wallet;
   village: Village;
   streak: Streak;

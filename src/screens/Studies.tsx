@@ -76,11 +76,11 @@ export default function Studies({ startNew }: { startNew: boolean }) {
         {state.studies.map((s) => {
           const m = studyMemory(state, s.id, now);
           return (
-            <a key={s.id} href={`#/estudio/${s.id}`} className="px" style={{ textDecoration: 'none', padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 170 }}>
+            <a key={s.id} href={s.course ? `#/curso/${s.id}` : `#/estudio/${s.id}`} className="px" style={{ textDecoration: 'none', padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 170 }}>
               <img src={folderIcon(s.color)} alt="" width={52} height={52} />
               <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: 16, lineHeight: 1.15 }}>{s.name}</div>
               <div className="vt" style={{ color: 'var(--ink-soft)', fontSize: 17 }}>
-                {studyCards(state, s.id).length} TARJETAS · {m === null ? 'SIN EMPEZAR' : `${m}%`}
+                {s.course ? `CURSO IA · ${s.course.levels.filter((l) => l.done).length}/${s.course.levels.length}` : `${studyCards(state, s.id).length} TARJETAS · ${m === null ? 'SIN EMPEZAR' : `${m}%`}`}
               </div>
               <div style={{ marginTop: 'auto' }}>
                 <Progress value={m ?? 0} color={FOLDER_BAR[s.color]} />

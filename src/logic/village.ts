@@ -29,7 +29,7 @@ export const CATALOG: Record<string, BuildingType> = {
   almacen: { type: 'almacen', name: 'Almacén', cost: 200, max: 2, defense: false, shop: true, desc: 'Guarda tus monedas. La Niebla intenta robarlas si tus defensas fallan.' },
   cuartel: { type: 'cuartel', name: 'Cuartel', cost: 300, max: 1, defense: false, shop: true, desc: 'Aquí esperan tus tropas. Se entrenan estudiando: 10 aciertos, una tropa.' },
   laboratorio: { type: 'laboratorio', name: 'Laboratorio', cost: 800, max: 1, defense: false, shop: true, desc: 'Usa cristales para mejorar tropas y defensas.' },
-  cabana: { type: 'cabana', name: 'Cabaña', cost: 0, max: 2, defense: false, shop: false, desc: 'Aquí vive un constructor.' },
+  cabana: { type: 'cabana', name: 'Cabaña', cost: 500, max: 2, defense: false, shop: true, desc: 'Aquí vive un constructor. Cada cabaña es una obra a la vez.' },
   arbol: { type: 'arbol', name: 'Árbol', cost: 10, max: 12, defense: false, shop: true, desc: 'Decoración.' },
   roca: { type: 'roca', name: 'Roca', cost: 0, max: 12, defense: false, shop: false, desc: 'Decoración.' },
 };
@@ -102,5 +102,5 @@ export function startingVillage(): Village {
     { id: 'd4', type: 'arbol', i: 14, j: 15, level: 1 },
     { id: 'd5', type: 'roca', i: 3, j: 4, level: 1 },
   ];
-  return { buildings: b, attacksDay: '', attacksUsed: 0, troops: 0, correctSinceTroop: 0 };
+  return { buildings: b, attacksDay: '', attacksUsed: 0, troops: 0, correctSinceTroop: 0, labLevel: 1, lastRaidDay: '', raid: null };
 }

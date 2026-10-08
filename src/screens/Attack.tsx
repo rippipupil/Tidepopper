@@ -3,6 +3,7 @@ import { useApp } from '../data/store';
 import { beginAttack, endAttack } from '../data/actions';
 import { attacksLeft, dayKey } from '../logic/rewards';
 import { buildQuiz, type QuizItem } from '../logic/quiz';
+import { hitPower } from '../logic/economy';
 import type { Placed } from '../data/types';
 import { Header } from '../components/ui';
 import IsoMap from '../components/IsoMap';
@@ -43,9 +44,10 @@ export default function Attack() {
     setQuiz(q);
   };
 
-  const pct = quiz ? Math.round((100 * hits) / quiz.length) : 0;
+  const power = quiz ? hitPower(quiz.length, state.village.labLevel) : 0;
+  const pct = quiz ? Math.min(100, Math.round(hits * power)) : 0;
   const finish = (finalHits: number) => {
-    const p = Math.round((100 * finalHits) / quiz!.length);
+    const p = Math.min(100, Math.round(finalHits * hitPower(quiz!.length, state.village.labLevel)));
     const { loot } = endAttack(state, p, quiz!.length);
     update((s) => endAttack(s, p, quiz!.length).state);
     setDone({ loot, pct: p });

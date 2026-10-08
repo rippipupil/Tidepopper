@@ -24,6 +24,17 @@ export default function StudyView({ id }: { id: string }) {
         <img src={folderIcon(study.color)} alt="" width={36} height={36} />
       </Header>
 
+      {study.course && (
+        <a href={`#/curso/${id}`} className="px row" style={{ textDecoration: 'none', padding: '12px 14px', gap: 12 }}>
+          <img src={icon('ai')} alt="" width={36} height={36} />
+          <span className="grow" style={{ fontWeight: 600 }}>
+            Curso del asistente · {study.course.levels.filter((l) => l.done).length}/{study.course.levels.length} niveles
+          </span>
+          <span className="vt" style={{ color: 'var(--blue-sh)' }}>
+            ABRIR &gt;
+          </span>
+        </a>
+      )}
       {queue.length > 0 ? (
         <a href={`#/estudio/${id}/repaso`} className="lcd row" style={{ textDecoration: 'none', padding: '16px 18px', gap: 14 }}>
           <div className="grow">
@@ -81,6 +92,10 @@ export default function StudyView({ id }: { id: string }) {
             Explícalo tú
           </a>
         </div>
+        <a className="btn ghost" href={`#/estudio/${id}/chat`}>
+          <img src={icon('ai')} alt="" width={22} height={22} />
+          Preguntar al asistente
+        </a>
         {!enough && cards.length > 0 && <p className="muted" style={{ margin: 0 }}>El Contrarreloj necesita al menos 4 tarjetas.</p>}
       </section>
 

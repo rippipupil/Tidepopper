@@ -57,12 +57,20 @@ export default function Home() {
           <img src={icon('doc')} alt="" />
           Mis documentos
         </a>
-        <a href="#/aldea" className="px tile">
-          <img src="img/iso/v-ayuntamiento.png" alt="" style={{ width: 64, height: 59 }} />
-          Mi aldea
+        <a href="#/curso/nuevo" className="px tile">
+          <img src={icon('ai')} alt="" />
+          Asistente IA
         </a>
       </div>
 
+      {state.village.raid && !state.village.raid.seen && (
+        <a href="#/asalto" className="lcd row" style={{ textDecoration: 'none', padding: '10px 12px' }}>
+          <img src="img/sprites/s-niebla.svg" alt="" width={32} height={32} />
+          <span className="grow" style={{ fontSize: 19, color: 'var(--coral)' }}>
+            ¡LA NIEBLA ATACÓ ESTA NOCHE! VER INFORME
+          </span>
+        </a>
+      )}
       {grietas > 0 && (
         <a href="#/aldea" className="lcd row" style={{ textDecoration: 'none', padding: '10px 12px' }}>
           <img src="img/sprites/s-niebla.svg" alt="" width={32} height={32} />
@@ -82,7 +90,7 @@ export default function Home() {
         {state.studies.slice(0, 4).map((s) => {
           const m = studyMemory(state, s.id, now);
           return (
-            <a key={s.id} href={`#/estudio/${s.id}`} className="row" style={{ textDecoration: 'none', color: 'var(--text)', padding: '12px 2px', borderBottom: '2px dashed var(--lcd-hi)', fontWeight: 600 }}>
+            <a key={s.id} href={s.course ? `#/curso/${s.id}` : `#/estudio/${s.id}`} className="row" style={{ textDecoration: 'none', color: 'var(--text)', padding: '12px 2px', borderBottom: '2px dashed var(--lcd-hi)', fontWeight: 600 }}>
               <img src={folderIcon(s.color)} alt="" width={26} height={26} />
               <span className="grow">{s.name}</span>
               {s.examDate && daysUntil(s.examDate, now) >= 0 && (

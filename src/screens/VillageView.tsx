@@ -1,23 +1,28 @@
 import { useState } from 'react';
 import { useApp } from '../data/store';
-import { build, cracks, linkDefense, moveBuilding, studyMemory } from '../data/actions';
+import { build, collect, cracks, linkDefense, moveBuilding, studyMemory, upgradeBuilding, upgradeLab } from '../data/actions';
+import { builders, busyBuilders, canUpgrade, labUpgradeCost, maxLevel, mineAvailable, mineCap, townHallLevel, upgradeCost, upgradeMinutes } from '../logic/economy';
+import { formatWait, useNow } from '../hooks';
 import { uid } from '../data/db';
 import { attacksLeft, dayKey, levelInfo } from '../logic/rewards';
-import { CATALOG, count, findSpot, isFree, sprite } from '../logic/village';
+import { CATALOG, count, findSpot, GRID, isFree, size, sprite } from '../logic/village';
 import { Coins, Nav } from '../components/ui';
 import IsoMap from '../components/IsoMap';
 
 type Mode = { kind: 'view' } | { kind: 'shop' } | { kind: 'sel'; id: string } | { kind: 'place'; type: string; i: number; j: number; moveId?: string };
 
-const SHOP = ['canon', 'arqueras', 'catapulta', 'ballesta', 'muro', 'mina', 'almacen', 'cuartel', 'laboratorio', 'arbol'];
+const SHOP = ['canon', 'arqueras', 'catapulta', 'ballesta', 'muro', 'mina', 'almacen', 'cuartel', 'laboratorio', 'cabana', 'arbol'];
+const UPGRADE_MSG = { max: 'NIVEL MÁXIMO (SUBE EL AYUNTAMIENTO)', coins: 'TE FALTAN MONEDAS', builders: 'TODOS LOS CONSTRUCTORES OCUPADOS', busy: 'YA ESTÁ EN OBRAS' } as const;
 
 export default function VillageView() {
   const { state, update } = useApp();
   const [mode, setMode] = useState<Mode>({ kind: 'view' });
   const [zoom, setZoom] = useState(1);
   const [note, setNote] = useState('');
-  const now = Date.now();
+  const now = useNow();
   const v = state.village;
+  const th = townHallLevel(v.buildings);
+  const studiedToday = state.streak.lastDay === dayKey(now);
   const lvl = levelInfo(state.wallet.xp);
   const left = attacksLeft(v, dayKey(now));
   const grietas = cracks(state, now);
@@ -66,7 +71,9 @@ export default function VillageView() {
           </span>
         </div>
         <div className="row vt" style={{ justifyContent: 'space-between', fontSize: 18 }}>
-          <span className="muted">TROPAS {v.troops} · ATAQUES HOY {left}/2</span>
+          <span className="muted">
+            TROPAS {v.troops} · ATAQUES {left}/2 · OBRAS {busyBuilders(v.buildings, now)}/{builders(v.buildings)}
+          </span>
           <button className="lcd" style={{ border: 0, cursor: 'pointer', padding: '3px 10px', fontSize: 18 }} onClick={() => setZoom(zoom === 1 ? 2 : 1)}>
             ZOOM {zoom}X
           </button>
@@ -80,8 +87,10 @@ export default function VillageView() {
           selectedId={sel?.id}
           ghost={mode.kind === 'place' ? { type: mode.type, i: mode.i, j: mode.j, ok: placeOk } : null}
           onBuilding={mode.kind === 'place' ? undefined : (b) => setMode({ kind: 'sel', id: b.id })}
-          onTile={mode.kind === 'place' ? (i, j) => setMode({ ...mode, i, j }) : undefined}
-          buildingStyle={(b) => (CATALOG[b.type].defense && (power(b.studyId) ?? 100) < 50 ? { filter: 'saturate(0.6) brightness(0.8)' } : undefined)}
+          onTile={mode.kind === 'place' ? (i, j) => setMode({ ...mode, i: Math.min(i, GRID - size(mode.type)), j: Math.min(j, GRID - size(mode.type)) }) : undefined}
+          buildingStyle={(b) =>
+            (b.upgradeUntil ?? 0) > now ? { filter: 'sepia(0.7) brightness(0.9)' } : CATALOG[b.type].defense && (power(b.studyId) ?? 100) < 50 ? { filter: 'saturate(0.6) brightness(0.8)' } : undefined
+          }
         >
           {grietas > 0 && (
             <>
@@ -101,6 +110,15 @@ export default function VillageView() {
 
         {mode.kind === 'view' && (
           <>
+            {v.raid && !v.raid.seen && (
+              <a href="#/asalto" className="lcd row" style={{ textDecoration: 'none', padding: '10px 12px' }}>
+                <img src="img/sprites/s-niebla.svg" alt="" width={32} height={32} />
+                <span className="grow" style={{ fontSize: 19, color: 'var(--coral)' }}>
+                  ¡LA NIEBLA ATACÓ! {v.raid.stolen ? `ROBÓ ${v.raid.stolen} MONEDAS` : 'NO PUDO ROBAR'}
+                </span>
+                <span style={{ fontSize: 19 }}>VER &gt;</span>
+              </a>
+            )}
             {grietas > 0 ? (
               <a href="#/estudios" className="lcd row" style={{ textDecoration: 'none', padding: '10px 12px' }}>
                 <img src="img/sprites/s-niebla.svg" alt="" width={32} height={32} />
@@ -189,6 +207,29 @@ export default function VillageView() {
               <div style={{ fontSize: 22 }}>COLOCA: {CATALOG[mode.type].name.toUpperCase()}</div>
               <div style={{ fontSize: 18, color: placeOk ? 'var(--mint)' : 'var(--coral)' }}>{placeOk ? 'TOCA OTRA CASILLA PARA MOVERLO' : 'CHOCA CON OTRO EDIFICIO O SE SALE'}</div>
             </div>
+            <div className="row" style={{ justifyContent: 'center', gap: 14 }}>
+              {(
+                [
+                  ['↖', -1, 0],
+                  ['↗', 0, -1],
+                  ['↙', 0, 1],
+                  ['↘', 1, 0],
+                ] as const
+              ).map(([label, di, dj]) => (
+                <button
+                  key={label}
+                  className="btn ghost"
+                  aria-label={`Mover ${label}`}
+                  style={{ width: 52, padding: 0, fontSize: 22 }}
+                  onClick={() => {
+                    const n = size(mode.type);
+                    setMode({ ...mode, i: Math.max(0, Math.min(GRID - n, mode.i + di)), j: Math.max(0, Math.min(GRID - n, mode.j + dj)) });
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="px" style={{ padding: '12px 14px', fontSize: 14, lineHeight: 1.4 }}>
               {CATALOG[mode.type].desc}
             </div>
@@ -210,11 +251,34 @@ export default function VillageView() {
               <div className="grow">
                 <h2 style={{ fontSize: 18 }}>{CATALOG[sel.type].name}</h2>
                 <div className="vt" style={{ color: 'var(--blue-sh)', fontSize: 18 }}>
-                  NIVEL {sel.level}
+                  NIVEL {sel.level}/{maxLevel(sel.type, th)}
+                  {(sel.upgradeUntil ?? 0) > now ? ` · EN OBRAS, ${formatWait(sel.upgradeUntil! - now)}` : ''}
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.35, color: 'var(--ink-soft)' }}>{CATALOG[sel.type].desc}</div>
               </div>
             </div>
+            {sel.type === 'mina' && (
+              <div className="lcd row" style={{ padding: 14, fontSize: 19 }}>
+                <img src="img/sprites/s-moneda.svg" alt="" width={26} height={26} />
+                <span className="grow">
+                  {mineAvailable(sel, now)}/{mineCap(sel.level)} · {studiedToday ? 'LISTA' : 'ESTUDIA HOY PARA VACIARLA'}
+                </span>
+                <button className="btn gold" disabled={!studiedToday || mineAvailable(sel, now) === 0} style={{ minHeight: 40, padding: '6px 12px' }} onClick={() => update((s) => collect(s, sel.id, Date.now()).state)}>
+                  Recoger
+                </button>
+              </div>
+            )}
+            {sel.type === 'laboratorio' && (
+              <div className="lcd row" style={{ padding: 14, fontSize: 19 }}>
+                <img src="img/sprites/s-cristal.svg" alt="" width={26} height={26} />
+                <span className="grow">TROPAS NIVEL {v.labLevel} · +{(v.labLevel - 1) * 15}% DAÑO</span>
+                {labUpgradeCost(v.labLevel) !== null && (
+                  <button className="btn" disabled={state.wallet.gems < labUpgradeCost(v.labLevel)!} style={{ minHeight: 40, padding: '6px 12px' }} onClick={() => update(upgradeLab)}>
+                    Mejorar · {labUpgradeCost(v.labLevel)}
+                  </button>
+                )}
+              </div>
+            )}
             {CATALOG[sel.type].defense && (
               <div className="lcd" style={{ padding: 14 }}>
                 <label className="lbl" htmlFor="feed">
@@ -230,12 +294,24 @@ export default function VillageView() {
                 </select>
               </div>
             )}
-            <div className="grid2" style={{ gap: 16 }}>
+            {(() => {
+              const err = canUpgrade(v.buildings, state.wallet.coins, sel.id, now);
+              const upgradable = maxLevel(sel.type, th) > 1;
+              return upgradable && err !== 'busy' ? (
+                <div className="vt" style={{ fontSize: 18, color: err ? 'var(--coral)' : 'var(--dim)' }}>
+                  {err ? UPGRADE_MSG[err] : `MEJORAR A NIVEL ${sel.level + 1}: ${upgradeCost(sel.type, sel.level)} MONEDAS · ${upgradeMinutes(sel.type, sel.level)} MIN (CADA SESIÓN DE ESTUDIO −30 MIN)`}
+                </div>
+              ) : null;
+            })()}
+            <div className="grid3" style={{ gap: 14 }}>
               <button className="btn ghost" onClick={() => setMode({ kind: 'view' })}>
                 Cerrar
               </button>
               <button className="btn" onClick={() => setMode({ kind: 'place', type: sel.type, i: sel.i, j: sel.j, moveId: sel.id })}>
                 Mover
+              </button>
+              <button className="btn gold" disabled={canUpgrade(v.buildings, state.wallet.coins, sel.id, now) !== null} onClick={() => update((s) => upgradeBuilding(s, sel.id, Date.now()))}>
+                Mejorar
               </button>
             </div>
           </>

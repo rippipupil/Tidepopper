@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { attackLoot, attacksLeft, levelInfo, sessionReward, startAttack, touchStreak, trainTroops } from './rewards';
 import type { Village } from '../data/types';
 
-const v0: Village = { buildings: [], attacksDay: '', attacksUsed: 0, troops: 0, correctSinceTroop: 0 };
+const v0: Village = { buildings: [], attacksDay: '', attacksUsed: 0, troops: 0, correctSinceTroop: 0, labLevel: 1, lastRaidDay: '', raid: null };
 
 describe('racha', () => {
   it('sube si ayer estudiaste', () => {
