@@ -8,6 +8,8 @@ export interface ManualRequest {
   files: string[];
   /** Si la respuesta debe ser JSON (para avisar al alumno de que la copie entera). */
   json: boolean;
+  /** Por qué no lo ha hecho sola la IA automática (vacío si no hay claves). */
+  reasons: string[];
   resolve: (text: string) => void;
   reject: (e: Error) => void;
 }
@@ -27,7 +29,7 @@ export function onManualRequest(l: (r: ManualRequest | null) => void): () => voi
   return () => listeners.delete(l);
 }
 
-export function askManual(prompt: string, files: string[], json: boolean): Promise<string> {
+export function askManual(prompt: string, files: string[], json: boolean, reasons: string[] = []): Promise<string> {
   current?.reject(new AiCancelled('Petición sustituida por otra.'));
   return new Promise((resolve, reject) => {
     const done = () => {
@@ -38,6 +40,7 @@ export function askManual(prompt: string, files: string[], json: boolean): Promi
       prompt,
       files,
       json,
+      reasons,
       resolve: (t) => (done(), resolve(t)),
       reject: (e) => (done(), reject(e)),
     };

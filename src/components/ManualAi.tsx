@@ -33,6 +33,11 @@ export default function ManualAi() {
     <div role="dialog" aria-modal="true" aria-labelledby="manual-title" style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(5,10,18,.82)', overflowY: 'auto', padding: 16 }}>
       <section className="px" style={{ maxWidth: 520, margin: '0 auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 id="manual-title">Pídeselo a Claude</h2>
+        {req.reasons.length > 0 && (
+          <p role="alert" style={{ margin: 0, fontSize: 13, lineHeight: 1.4, padding: '8px 10px', background: 'rgba(212,144,127,.25)' }}>
+            La IA automática no ha podido: {req.reasons.join(' · ')}.
+          </p>
+        )}
         <ol style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.5 }}>
           <li>Copia la petición.</li>
           <li>
@@ -71,7 +76,7 @@ export default function ManualAi() {
             Usar respuesta
           </button>
         </div>
-        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.4, opacity: 0.8 }}>Para que sea automático, pon una clave gratis de Gemini en Perfil.</p>
+        {req.reasons.length === 0 && <p style={{ margin: 0, fontSize: 12, lineHeight: 1.4, opacity: 0.8 }}>Para que sea automático, pon una clave gratis de Gemini en Perfil.</p>}
       </section>
     </div>
   );

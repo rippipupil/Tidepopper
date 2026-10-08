@@ -110,7 +110,10 @@ async function claudeText(key: string, r: TextReq): Promise<string> {
 
 // ---------- Gemini (gratis con clave de Google AI Studio) ----------
 
-const GEMINI_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest'];
+// Los alias por si no se puede leer la lista de modelos. Flash-Lite va primero:
+// en el plan gratis tiene muchos más usos al día y responde más rápido.
+const GEMINI_FALLBACK = ['gemini-flash-lite-latest', 'gemini-flash-latest'];
+const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
 
 async function httpError(res: Response): Promise<AiError> {
   let detail = '';
@@ -121,27 +124,75 @@ async function httpError(res: Response): Promise<AiError> {
     // sin cuerpo JSON
   }
   if (res.status === 429) return new AiError('se ha acabado el uso gratis por ahora (vuelve a probar en un rato o mañana)');
-  if (res.status === 401 || res.status === 403 || /api key|API_KEY/i.test(detail)) return new AiError('la clave no es válida');
+  if (res.status === 401 || res.status === 403 || /api key/i.test(detail)) return new AiError('la clave no es válida');
   return new AiError(`error ${res.status}${detail ? `: ${detail.slice(0, 140)}` : ''}`);
 }
 
-async function post(url: string, headers: Record<string, string>, body: unknown): Promise<Response> {
+/** fetch con tiempo máximo, para que nada se quede colgado. */
+async function call(url: string, init: RequestInit, seconds: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), seconds * 1000);
   try {
-    return await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+    return await fetch(url, { ...init, signal: ctrl.signal });
   } catch {
-    throw new AiError('sin conexión');
+    throw new AiError(ctrl.signal.aborted ? `no ha respondido en ${seconds} s` : 'sin conexión');
+  } finally {
+    clearTimeout(t);
   }
 }
 
-async function gemini(key: string, system: string, contents: unknown[], json: boolean): Promise<string> {
+function post(url: string, headers: Record<string, string>, body: unknown, seconds = 120): Promise<Response> {
+  return call(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }, seconds);
+}
+
+/** Ordena los modelos Flash estables por versión: el Flash-Lite más nuevo primero y luego el Flash más nuevo. */
+export function pickGeminiModels(names: string[]): string[] {
+  const parsed = names
+    .map((n) => n.replace(/^models\//, '').match(/^gemini-(\d+(?:\.\d+)?)-flash(-lite)?$/))
+    .filter((m): m is RegExpMatchArray => !!m)
+    .map((m) => ({ id: m[0], v: Number(m[1]), lite: !!m[2] }))
+    .sort((x, y) => y.v - x.v);
+  const lite = parsed.filter((m) => m.lite).slice(0, 2).map((m) => m.id);
+  const flash = parsed.filter((m) => !m.lite).slice(0, 1).map((m) => m.id);
+  return [...new Set([...lite, ...flash, ...GEMINI_FALLBACK])];
+}
+
+const modelCache = new Map<string, Promise<string[]>>();
+
+/** Pregunta a Google qué modelos puede usar esta clave (los retiran y cambian a menudo). */
+function geminiModels(key: string): Promise<string[]> {
+  let p = modelCache.get(key);
+  if (!p) {
+    p = call(`${GEMINI}/models?pageSize=1000`, { headers: { 'x-goog-api-key': key } }, 15)
+      .then(async (res) => {
+        if (!res.ok) throw await httpError(res);
+        const data = await res.json();
+        return pickGeminiModels(
+          (data?.models ?? [])
+            .filter((m: { supportedGenerationMethods?: string[] }) => m.supportedGenerationMethods?.includes('generateContent'))
+            .map((m: { name: string }) => m.name),
+        );
+      })
+      .catch((e) => {
+        modelCache.delete(key);
+        if (e instanceof AiError && /clave/.test(e.message)) throw e;
+        return GEMINI_FALLBACK;
+      });
+    modelCache.set(key, p);
+  }
+  return p;
+}
+
+async function gemini(key: string, system: string, contents: unknown[], json: boolean, seconds = 120): Promise<string> {
   let last: Error = new AiError('sin modelo disponible');
-  for (const model of GEMINI_MODELS) {
-    const res = await post(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { 'x-goog-api-key': key }, {
+  for (const model of await geminiModels(key)) {
+    const res = await post(`${GEMINI}/models/${model}:generateContent`, { 'x-goog-api-key': key }, {
       systemInstruction: { parts: [{ text: system }] },
       contents,
       generationConfig: json ? { responseMimeType: 'application/json' } : {},
-    });
-    if (res.status === 404) {
+    }, seconds);
+    if (res.status === 404 || res.status === 429 || res.status === 503) {
+      // Modelo retirado, sin cuota o saturado: la cuota es por modelo, así que probamos otro.
       last = await httpError(res);
       continue;
     }
@@ -169,7 +220,7 @@ function geminiParts(parts: AiPart[], user: string): unknown[] {
 
 const GROQ_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'];
 
-async function groq(key: string, messages: { role: string; content: string }[], json: boolean): Promise<string> {
+async function groq(key: string, messages: { role: string; content: string }[], json: boolean, seconds = 120): Promise<string> {
   let last: Error = new AiError('sin modelo disponible');
   for (const model of GROQ_MODELS) {
     const res = await post('https://api.groq.com/openai/v1/chat/completions', { authorization: `Bearer ${key}` }, {
@@ -177,9 +228,9 @@ async function groq(key: string, messages: { role: string; content: string }[], 
       messages,
       ...(json ? { response_format: { type: 'json_object' } } : {}),
       ...(model.startsWith('openai/') ? { reasoning_effort: 'low' } : {}),
-    });
-    if (res.status === 404 || res.status === 400) {
-      // Modelo retirado del plan gratis o que no acepta algún parámetro: probamos el siguiente.
+    }, seconds);
+    if (res.status === 404 || res.status === 400 || res.status === 429) {
+      // Modelo retirado del plan gratis, que no acepta algún parámetro o sin cuota (es por modelo): probamos el siguiente.
       last = await httpError(res);
       continue;
     }
@@ -284,7 +335,7 @@ export async function structured<T>(keys: AiKeys, r: StructuredReq<T>): Promise<
   const files = (r.parts ?? []).filter((p) => p.kind !== 'text').map((p) => p.name);
   const sources = (r.parts ?? []).map((p) => (p.kind === 'text' ? `Fuente «${p.name}»:\n\n${p.text}\n\n` : '')).join('');
   try {
-    return await viaJson(r.schema, (fix) => askManual(manualPrompt(r.system + jsonInstructions(r.schema), sources + r.user + fix), files, true));
+    return await viaJson(r.schema, (fix) => askManual(manualPrompt(r.system + jsonInstructions(r.schema), sources + r.user + fix), files, true, errs));
   } catch (e) {
     if (e instanceof AiCancelled) throw new AiError(`Cancelado${failures(errs)}.`);
     throw e;
@@ -304,19 +355,23 @@ export async function text(keys: AiKeys, r: TextReq): Promise<string> {
   }
   const convo = r.history.map((m) => `${m.role === 'user' ? 'ALUMNO' : 'ASISTENTE'}: ${m.text}`).join('\n\n');
   try {
-    return (await askManual(manualPrompt(r.system, `Conversación hasta ahora:\n\n${convo}\n\nResponde al último mensaje del alumno.`), [], false)).trim();
+    return (await askManual(manualPrompt(r.system, `Conversación hasta ahora:\n\n${convo}\n\nResponde al último mensaje del alumno.`), [], false, errs)).trim();
   } catch (e) {
     if (e instanceof AiCancelled) throw new AiError(`Cancelado${failures(errs)}.`);
     throw e;
   }
 }
 
-/** Prueba una clave concreta con una pregunta mínima. */
+/** Prueba una clave concreta con una pregunta mínima (como mucho 30 s). */
 export async function testProvider(id: ProviderId, keys: AiKeys): Promise<string> {
-  return textWith(id, keys, { system: 'Responde en español con una sola frase corta.', history: [{ role: 'user', text: 'Saluda al alumno de Tidepopper.' }] });
+  const system = 'Responde en español con una sola frase corta.';
+  const ask = 'Saluda al alumno de Tidepopper.';
+  if (id === 'gemini') return gemini(keys.geminiKey!.trim(), system, [{ role: 'user', parts: [{ text: ask }] }], false, 30);
+  if (id === 'groq') return groq(keys.groqKey!.trim(), [{ role: 'system', content: system }, { role: 'user', content: ask }], false, 30);
+  return claudeText(keys.apiKey.trim(), { system, history: [{ role: 'user', text: ask }] });
 }
 
 export function describeAiError(e: unknown): string {
-  if (e instanceof AiRefusal || e instanceof AiError) return e.message;
+  if (e instanceof AiRefusal || e instanceof AiError) return e.message.charAt(0).toUpperCase() + e.message.slice(1);
   return 'Algo ha fallado al hablar con la IA.';
 }

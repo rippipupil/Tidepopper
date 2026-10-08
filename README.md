@@ -62,7 +62,7 @@ Todo se guarda **solo en tu dispositivo** (IndexedDB): estudios, tarjetas, aldea
 La IA funciona **gratis**. Se elige sola, en este orden, y si una falla (sin cuota, sin red…) pasa a la siguiente:
 
 1. **Claude** (opcional, de pago): la mejor calidad. Solo si pones tu clave de console.anthropic.com.
-2. **Gemini** (gratis, recomendada): clave gratis sin tarjeta en [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Lee también PDF y fotos. En el plan gratis Google puede usar lo que envíes para mejorar sus modelos.
+2. **Gemini** (gratis, recomendada): clave gratis sin tarjeta en [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Lee también PDF y fotos. Usa primero Flash-Lite (más rápido y con más usos gratis al día) y, si se queda sin cuota, Flash. En el plan gratis Google puede usar lo que envíes para mejorar sus modelos.
 3. **Groq** (gratis, de reserva): clave gratis en [console.groq.com/keys](https://console.groq.com/keys). Muchos usos al día, solo texto.
 4. **Copiar y pegar**: sin ninguna clave, la app prepara la petición, la pegas en tu app de Claude y pegas la respuesta de vuelta.
 
