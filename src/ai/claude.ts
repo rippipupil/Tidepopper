@@ -88,3 +88,65 @@ export function describeAiError(e: unknown): string {
   if (e instanceof Anthropic.APIError) return `Error de Claude (${e.status}). Prueba otra vez.`;
   return 'Algo ha fallado al hablar con Claude.';
 }
+
+const ExamPack = z.object({
+  questions: z
+    .array(
+      z.object({
+        type: z.enum(['choice', 'open']).describe('choice = tipo test; open = desarrollo corto'),
+        prompt: z.string().describe('Enunciado de la pregunta'),
+        options: z.array(z.string()).describe('4 opciones si es tipo test; vacío si es de desarrollo'),
+        answer: z.number().int().describe('Índice (0-3) de la opción correcta; -1 si es de desarrollo'),
+        explanation: z.string().describe('Por qué esa es la respuesta correcta, una frase'),
+        reference: z.string().describe('Respuesta modelo breve si es de desarrollo; vacío si es tipo test'),
+      }),
+    )
+    .describe('10 preguntas: 8 tipo test y 2 de desarrollo corto, de dificultad variada'),
+});
+
+export interface AiExamQuestion {
+  type: 'choice' | 'open';
+  prompt: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+  reference: string;
+}
+
+/** Prepara un examen tipo test + desarrollo a partir del resumen y las tarjetas. */
+export async function generateExam(apiKey: string, studyName: string, summary: string, cards: { front: string; back: string }[]): Promise<AiExamQuestion[]> {
+  const material = [summary ? `RESUMEN:\n${summary}` : '', 'TARJETAS:', ...cards.map((c) => `- ${c.front}: ${c.back}`)].join('\n');
+  const res = await client(apiKey).beta.messages.parse({
+    model: MODEL,
+    max_tokens: 16000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'medium', format: betaZodOutputFormat(ExamPack) },
+    system:
+      'Eres un profesor que pone exámenes justos en español. Pregunta solo por lo que está en el material del alumno. ' +
+      'Las opciones incorrectas deben ser plausibles, no absurdas. Mezcla preguntas de memoria con otras de comprender y relacionar.',
+    messages: [{ role: 'user', content: `Pon un examen del tema «${studyName}» con este material:\n\n${material}` }],
+  });
+  if (res.stop_reason === 'refusal' || !res.parsed_output) throw new AiRefusal('Claude no ha podido preparar el examen.');
+  return res.parsed_output.questions.filter((q) => (q.type === 'choice' ? q.options.length >= 2 && q.answer >= 0 && q.answer < q.options.length : q.prompt.trim().length > 0));
+}
+
+const OpenGrades = z.object({
+  grades: z.array(z.object({ score: z.number().int().min(0).max(10), feedback: z.string().describe('Qué falta o qué está mal, en una o dos frases') })),
+});
+
+/** Corrige de golpe las preguntas de desarrollo de un examen (0–10 cada una). */
+export async function gradeOpenAnswers(apiKey: string, items: { prompt: string; reference: string; answer: string }[]): Promise<{ score: number; feedback: string }[]> {
+  const text = items.map((it, k) => `PREGUNTA ${k + 1}: ${it.prompt}\nRespuesta modelo: ${it.reference}\nRespuesta del alumno: ${it.answer || '(en blanco)'}`).join('\n\n');
+  const res = await client(apiKey).beta.messages.parse({
+    model: MODEL,
+    max_tokens: 4000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low', format: betaZodOutputFormat(OpenGrades) },
+    system: 'Eres un profesor que corrige exámenes en español con criterio y amabilidad. Una respuesta en blanco vale 0. Devuelve una nota por pregunta, en el mismo orden.',
+    messages: [{ role: 'user', content: text }],
+  });
+  if (res.stop_reason === 'refusal' || !res.parsed_output) throw new AiRefusal('Claude no ha podido corregir el examen.');
+  return items.map((_, k) => res.parsed_output!.grades[k] ?? { score: 0, feedback: 'Sin corregir.' });
+}

@@ -1,5 +1,6 @@
 import { useApp } from '../data/store';
-import { deleteStudy, studyCards, studyMemory } from '../data/actions';
+import { deleteStudy, setExamDate, studyCards, studyExams, studyMemory } from '../data/actions';
+import { daysUntil, formatScore } from '../logic/exam';
 import { sessionQueue } from '../logic/srs';
 import { go } from '../router';
 import { folderIcon, Header, icon, Nav } from '../components/ui';
@@ -14,6 +15,8 @@ export default function StudyView({ id }: { id: string }) {
   const m = studyMemory(state, id, now);
   const sources = state.sources.filter((s) => s.studyId === id);
   const enough = cards.length >= 4;
+  const last = studyExams(state, id)[0];
+  const left = study.examDate ? daysUntil(study.examDate, now) : null;
 
   return (
     <main className="screen">
@@ -37,6 +40,26 @@ export default function StudyView({ id }: { id: string }) {
           {cards.length === 0 ? '> AÑADE APUNTES PARA CREAR TARJETAS' : `> AL DÍA · MEMORIA ${m ?? 0}%`}
         </div>
       )}
+
+      <section className="lcd" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="row" style={{ alignItems: 'flex-start' }}>
+          <img src={icon('timer')} alt="" width={36} height={36} />
+          <div className="grow" style={{ fontSize: 19, lineHeight: 1.15 }}>
+            <div style={{ color: 'var(--dim)' }}>&gt; EXAMEN</div>
+            <div>
+              {left === null ? 'SIN FECHA' : left > 0 ? `EN ${left} ${left === 1 ? 'DÍA' : 'DÍAS'}` : left === 0 ? 'ES HOY' : 'YA PASÓ'}
+              {last ? ` · ÚLTIMA NOTA ${formatScore(last.score)}` : ''}
+            </div>
+          </div>
+          <a className="btn gold" href={cards.length ? `#/estudio/${id}/examen` : undefined} aria-disabled={!cards.length} style={{ opacity: cards.length ? 1 : 0.5, minHeight: 44, padding: '8px 14px' }}>
+            Hacer examen
+          </a>
+        </div>
+        <label className="row" style={{ fontSize: 17, color: 'var(--dim)', gap: 10 }}>
+          FECHA
+          <input type="date" className="field" style={{ padding: '6px 10px', fontSize: 14, flex: 1 }} value={study.examDate ?? ''} onChange={(e) => update((s) => setExamDate(s, id, e.target.value || undefined))} />
+        </label>
+      </section>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <h2>Estudiar</h2>

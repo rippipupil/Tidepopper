@@ -11,6 +11,7 @@ import Explain from './screens/Explain';
 import VillageView from './screens/VillageView';
 import Attack from './screens/Attack';
 import Settings from './screens/Settings';
+import Exam from './screens/Exam';
 
 export default function App() {
   const { ready } = useApp();
@@ -32,6 +33,7 @@ export default function App() {
     if (sub === 'resumen') return <SummaryView id={id} />;
     if (sub === 'contrarreloj') return <TimeAttack id={id} />;
     if (sub === 'explica') return <Explain id={id} />;
+    if (sub === 'examen') return <Exam key={id} id={id} />;
     return <StudyView id={id} />;
   }
   if (a === 'recompensa') return <RewardView q={query} />;

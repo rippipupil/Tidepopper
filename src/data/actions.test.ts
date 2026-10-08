@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addCards, beginAttack, build, createStudy, endAttack, finishSession, gradeCard, hydrate, initialState, moveBuilding, studyMemory } from './actions';
+import { addCards, beginAttack, build, createStudy, deleteStudy, endAttack, finishExam, finishSession, gradeCard, hydrate, initialState, moveBuilding, studyExams, studyMemory } from './actions';
 
 const now = new Date(2026, 9, 8, 12).getTime();
 let n = 0;
@@ -48,5 +48,15 @@ describe('acciones', () => {
     const s = hydrate({ studies: [{ id: 'x', name: 'X', color: 'gold', createdAt: 1 }] } as never);
     expect(s.studies).toHaveLength(1);
     expect(s.village.buildings.length).toBeGreaterThan(0);
+  });
+
+  it('un examen guarda la nota, paga y se borra con su estudio', () => {
+    let s = createStudy(initialState(), 'Historia', 'gold', now, 'h');
+    const r = finishExam(s, { id: 'x1', studyId: 'h', at: now, kind: 'rapido', score: 8, correct: 8, total: 10 }, now);
+    expect(r.reward.coins).toBe(200);
+    s = r.state;
+    expect(s.wallet.coins).toBe(500);
+    expect(studyExams(s, 'h').map((e) => e.score)).toEqual([8]);
+    expect(deleteStudy(s, 'h').exams).toHaveLength(0);
   });
 });

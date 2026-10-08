@@ -1,0 +1,8 @@
+{
+  "appId": "com.rippipupil.tidepopper",
+  "appName": "Tidepopper",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#17222f"
+  }
+}

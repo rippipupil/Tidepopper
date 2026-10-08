@@ -2,6 +2,7 @@ import { useApp } from '../data/store';
 import { cracks, studyMemory } from '../data/actions';
 import { sessionQueue } from '../logic/srs';
 import { levelInfo } from '../logic/rewards';
+import { daysUntil } from '../logic/exam';
 import { Coins, folderIcon, icon, Nav } from '../components/ui';
 
 export default function Home() {
@@ -84,6 +85,11 @@ export default function Home() {
             <a key={s.id} href={`#/estudio/${s.id}`} className="row" style={{ textDecoration: 'none', color: 'var(--text)', padding: '12px 2px', borderBottom: '2px dashed var(--lcd-hi)', fontWeight: 600 }}>
               <img src={folderIcon(s.color)} alt="" width={26} height={26} />
               <span className="grow">{s.name}</span>
+              {s.examDate && daysUntil(s.examDate, now) >= 0 && (
+                <span className="vt" style={{ color: 'var(--gold)', fontSize: 17 }}>
+                  EXAMEN {daysUntil(s.examDate, now) === 0 ? 'HOY' : `EN ${daysUntil(s.examDate, now)} D`}
+                </span>
+              )}
               <span className="vt" style={{ color: 'var(--glow)' }}>
                 {m === null ? '—' : `${m}%`}
               </span>

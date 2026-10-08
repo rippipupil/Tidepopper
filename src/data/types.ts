@@ -75,11 +75,22 @@ export interface Settings {
   apiKey: string;
 }
 
+export interface ExamRecord {
+  id: string;
+  studyId: string;
+  at: number;
+  kind: 'rapido' | 'ia';
+  score: number; // nota sobre 10, con un decimal
+  correct: number;
+  total: number;
+}
+
 export interface AppState {
   version: 1;
   studies: Study[];
   sources: Source[];
   cards: Card[];
+  exams: ExamRecord[];
   wallet: Wallet;
   village: Village;
   streak: Streak;

@@ -1,0 +1,105 @@
+name: Generar y publicar el APK de Tidepopper
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Compilar APK Android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Comprobar tipos y tests
+        run: npm run typecheck && npm test
+
+      - name: Compilar la web
+        run: npx vite build
+
+      - name: Crear proyecto Android
+        run: npx cap add android
+
+      - name: Permiso de cámara y número de versión
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: python3 android-src/install.py android
+
+      - name: Generar el icono de la app a partir de assets/
+        run: npx @capacitor/assets generate --android
+
+      - name: Copiar la web al proyecto Android
+        run: npx cap sync android
+
+      # Versión "release" (no depurable): Play Protect desconfía mucho más de las de depuración.
+      - name: Compilar APK (release)
+        working-directory: android
+        run: ./gradlew assembleRelease
+
+      # La clave de firma se guarda como secretos del repositorio (Settings → Secrets and
+      # variables → Actions), nunca en el código. Firmar siempre con la misma clave permite
+      # instalar cada APK nuevo encima del anterior como una actualización.
+      # Sin secretos se firma con una clave temporal: sirve para probar, pero cada APK
+      # así obliga a desinstalar el anterior, por eso no se publica en Releases.
+      - name: Firmar el APK
+        id: sign
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: |
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          "$BUILD_TOOLS/zipalign" -f -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            ALIAS="${KEY_ALIAS:-tidepopper}"
+            echo "official=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Faltan los secretos RELEASE_KEYSTORE_BASE64 y RELEASE_KEYSTORE_PASSWORD: el APK se firma con una clave temporal y no se publica en Releases. Consulta el README (sección 'Firma del APK')."
+            KEYSTORE_PASSWORD="temporal-$GITHUB_RUN_ID"
+            ALIAS=temporal
+            keytool -genkeypair -keystore "$RUNNER_TEMP/release.keystore" -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 30 \
+              -storepass "$KEYSTORE_PASSWORD" -keypass "$KEYSTORE_PASSWORD" -dname "CN=Tidepopper prueba"
+            echo "official=false" >> "$GITHUB_OUTPUT"
+          fi
+          export KEYSTORE_PASSWORD
+          "$BUILD_TOOLS/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEYSTORE_PASSWORD --out tidepopper.apk aligned.apk
+          rm -f "$RUNNER_TEMP/release.keystore"
+          "$BUILD_TOOLS/apksigner" verify --print-certs tidepopper.apk
+
+      - name: Guardar APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: tidepopper-apk
+          path: tidepopper.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publicar APK descargable en Releases
+        if: steps.sign.outputs.official == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="apk-${{ github.run_number }}"
+          gh release create "$TAG" tidepopper.apk --target "${{ github.sha }}" --title "Tidepopper Android $TAG" --notes "APK generado automáticamente desde la rama main. Descárgalo e instálalo para usar Tidepopper en Android."

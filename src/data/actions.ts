@@ -1,4 +1,5 @@
-import type { AppState, Card, FolderColor, Grade, Source, Study } from './types';
+import type { AppState, Card, ExamRecord, FolderColor, Grade, Source, Study } from './types';
+import { examReward } from '../logic/exam';
 import { memory, newSchedule, overdue, review } from '../logic/srs';
 import { applyReward, attackLoot, dayKey, sessionReward, startAttack, touchStreak, trainTroops, type Reward } from '../logic/rewards';
 import { canBuild, CATALOG, isFree, startingVillage, type BuildError } from '../logic/village';
@@ -9,6 +10,7 @@ export function initialState(): AppState {
     studies: [],
     sources: [],
     cards: [],
+    exams: [],
     wallet: { coins: 300, gems: 0, xp: 0 },
     village: startingVillage(),
     streak: { lastDay: '', days: 0 },
@@ -34,6 +36,7 @@ export function deleteStudy(s: AppState, id: string): AppState {
     studies: s.studies.filter((x) => x.id !== id),
     sources: s.sources.filter((x) => x.studyId !== id),
     cards: s.cards.filter((x) => x.studyId !== id),
+    exams: s.exams.filter((x) => x.studyId !== id),
     village: { ...s.village, buildings: s.village.buildings.map((b) => (b.studyId === id ? { ...b, studyId: undefined } : b)) },
   };
 }
@@ -114,4 +117,22 @@ export function endAttack(s: AppState, destroyedPct: number, troopsUsed: number)
     loot,
     state: { ...s, wallet: { ...s.wallet, coins: s.wallet.coins + loot }, village: { ...s.village, troops: Math.max(0, s.village.troops - troopsUsed) } },
   };
+}
+
+export function setExamDate(s: AppState, studyId: string, examDate: string | undefined): AppState {
+  return { ...s, studies: s.studies.map((x) => (x.id === studyId ? { ...x, examDate } : x)) };
+}
+
+/** Guarda la nota de un examen y paga la recompensa (cuenta como día de estudio). */
+export function finishExam(s: AppState, record: ExamRecord, now: number): { state: AppState; reward: Reward } {
+  const streak = touchStreak(s.streak, dayKey(now));
+  const reward = examReward(record.score, streak.days);
+  return {
+    reward,
+    state: { ...s, streak, exams: [...s.exams, record], wallet: applyReward(s.wallet, reward), village: trainTroops(s.village, record.correct) },
+  };
+}
+
+export function studyExams(s: AppState, studyId: string): ExamRecord[] {
+  return s.exams.filter((e) => e.studyId === studyId).sort((a, b) => b.at - a.at);
 }
