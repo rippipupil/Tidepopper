@@ -10,6 +10,7 @@ export interface Study {
   examDate?: string; // AAAA-MM-DD
   summary?: string;
   course?: Course; // solo en los estudios creados por el asistente IA
+  alphabet?: string; // id de alfabeto para el juego de dibujar letras
 }
 
 export interface LevelQuestion {
@@ -137,6 +138,17 @@ export interface ExamRecord {
   total: number;
 }
 
+export type StatKey = 'reviews' | 'games' | 'mixed' | 'letters' | 'levels' | 'exams' | 'examsPassed' | 'attacks' | 'built' | 'removed';
+
+export interface Progress {
+  totals: Record<StatKey, number>;
+  day: string;
+  today: Record<StatKey, number>;
+  bestExam: number;
+  missionsClaimed: string[]; // de hoy
+  achievements: string[]; // logros ya cobrados
+}
+
 export interface AppState {
   version: 1;
   studies: Study[];
@@ -144,6 +156,7 @@ export interface AppState {
   cards: Card[];
   exams: ExamRecord[];
   chats: Record<string, ChatMsg[]>; // por estudio
+  progress: Progress;
   wallet: Wallet;
   village: Village;
   streak: Streak;

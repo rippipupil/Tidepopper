@@ -122,3 +122,37 @@ describe('mina recién construida', () => {
     expect(mineAvailable(m, now + 2 * 3_600_000)).toBe(30);
   });
 });
+
+import { achievementsStatus, claimAchievement, claimMission, missionsToday, removeObstacle } from './actions';
+
+describe('misiones, logros y obstáculos', () => {
+  it('repasar cuenta para la misión de repaso, que se cobra una sola vez', () => {
+    let s = finishSession(initialState(), 40, 40, now).state;
+    const rep = missionsToday(s, now).find((m) => m.key === 'reviews')!;
+    expect(rep.done).toBe(true);
+    const coins = s.wallet.coins;
+    s = claimMission(s, rep.id, now);
+    expect(s.wallet.coins).toBe(coins + rep.coins);
+    expect(claimMission(s, rep.id, now)).toBe(s);
+  });
+
+  it('un logro cumplido da cristales y desbloquea su decoración', () => {
+    let s = createStudy(initialState(), 'X', 'blue', now, 'x');
+    s = finishSession(s, 100, 100, now).state;
+    expect(achievementsStatus(s).filter((a) => a.done).map((a) => a.id)).toEqual(['primer', 'rep100']);
+    expect(build({ ...s, wallet: { ...s.wallet, coins: 999 } }, 'farol', 12, 12, 'f').error).toBe('locked');
+    const gems = s.wallet.gems;
+    s = claimAchievement(s, 'rep100');
+    expect(s.wallet.gems).toBe(gems + 2);
+    expect(build({ ...s, wallet: { ...s.wallet, coins: 999 } }, 'farol', 12, 12, 'f').error).toBeNull();
+  });
+
+  it('quitar una roca cuesta 20 y a veces da un cristal', () => {
+    const s = initialState();
+    const lucky = removeObstacle(s, 'd5', 0.1, now);
+    expect(lucky.gem).toBe(true);
+    expect(lucky.state.wallet.coins).toBe(280);
+    expect(lucky.state.village.buildings.some((b) => b.id === 'd5')).toBe(false);
+    expect(removeObstacle(s, 'th', 0.1, now).state).toBe(s);
+  });
+});

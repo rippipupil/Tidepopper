@@ -100,6 +100,21 @@ M['cuartel']=(m,3)
 # Laboratorio 2x2
 m=Model(); m.box(0,0,0,6,6,1,STD,0.08).box(1,1,1,4,4,2,WH,0.03).box(1,1,3,4,4,1,GL).box(2,2,4,2,2,1,'#c6e2f2').put(4,2,1,WDD).put(4,2,2,WDD).put(1,4,4,'#8cc5b0').put(1,4,5,'#8cc5b0')
 M['laboratorio']=(m,2)
+# Torre mágica 2x2
+m=Model(); m.box(0,0,0,6,6,1,STD,0.08).box(1,1,1,4,4,6,'#8a9bb0',0.06)
+for k in (2,4): m.put(4,2,k,GL).put(2,4,k,GL)
+m.box(0,0,7,6,6,1,RFD).box(1,1,8,4,4,1,RF).box(2,2,9,2,2,2,'#a9d2ee').put(2,2,11,'#e6f3fb').put(3,3,11,'#c6e2f2').put(2,3,12,'#e6f3fb')
+M['torre_magica']=(m,2)
+# Decoraciones nuevas
+m=Model(); m.box(1,1,0,1,1,4,MTD).put(1,1,4,'#f2e2b4').put(1,1,5,MT); M['farol']=(m,1)
+m=Model(); m.box(0,0,0,1,1,6,MT).box(1,0,4,2,1,2,CO).put(1,0,5,COD).put(0,0,6,GO); M['bandera']=(m,1)
+m=Model(); m.box(1,1,0,4,4,2,ST,0.08).box(2,2,2,2,2,3,'#c9d3dc').box(2,2,5,2,2,1,'#dfe6ec').put(3,2,3,GO).put(3,3,3,GO); M['estatua']=(m,2)
+m=Model(); m.box(0,0,0,6,6,1,ST,0.08)
+for a in range(6):
+    for b in range(6):
+        if a in (0,5) or b in (0,5): m.put(a,b,1,ST)
+m.box(1,1,1,4,4,1,'#5f8fb3').box(2,2,1,2,2,3,ST).box(2,2,4,2,2,1,'#8fb8d6').put(2,2,5,'#c6e2f2'); M['fuente']=(m,2)
+m=Model(); m.put(0,0,0,'#5f8a6f').put(0,0,1,CO).put(2,1,0,'#5f8a6f').put(2,1,1,GO).put(1,2,0,'#5f8a6f').put(1,2,1,'#c3c9de').put(2,2,0,'#5f8a6f').put(2,2,1,CO); M['flores']=(m,1)
 # Decoración
 m=Model(); m.box(1,1,0,1,1,2,WDD).box(0,0,2,3,3,2,'#4f7a62',0.12).put(1,1,4,'#5f8f72'); M['arbol']=(m,1)
 m=Model(); m.box(0,0,0,3,2,1,'#8a96a3',0.1).put(1,1,1,'#9aa6b3').put(2,0,1,'#8a96a3'); M['roca']=(m,1)
@@ -115,10 +130,39 @@ for a in range(N*3):
         if a==N*3-1 or b==N*3-1:
             m.put(a,b,-1,'#7a6a55',0.08); m.put(a,b,-2,'#6a5a48',0.08)
 M['suelo']=(m,N)
+
+# Variantes por nivel: nivel 3-4 (base dorada, tejado más vivo) y nivel 5 (además, un cristal arriba)
+GOLD_BASE = '#c9b27a'
+def tiered(model, tier):
+    t = Model()
+    for (x,y,z),(c,j) in model.v.items():
+        if tier >= 2 and z <= 0 and c in (ST, STD): c = GOLD_BASE
+        if tier >= 2 and c in (RF, RFD): c = '#4f86b8' if c == RF else '#3e6f9c'
+        if tier >= 2 and c == WD: c = '#a8805c'
+        t.v[(x,y,z)] = (c,j)
+    if tier >= 3:
+        top = max(z for (_,_,z) in model.v)
+        xs = sorted(x for (x,_,_) in model.v); ys = sorted(y for (_,y,_) in model.v)
+        cx, cy = (xs[0]+xs[-1])//2, (ys[0]+ys[-1])//2
+        t.put(cx,cy,top+1,'#a9d2ee').put(cx,cy,top+2,'#e6f3fb')
+    return t
+TIERABLE = ['ayuntamiento','canon','arqueras','catapulta','ballesta','torre_magica','mina','almacen','cuartel','laboratorio','cabana']
+for name in TIERABLE:
+    base, n = M[name]
+    M[f'{name}@2'] = (tiered(base,2), n)
+    M[f'{name}@3'] = (tiered(base,3), n)
+mw, n = M['muro']
+w2 = Model(); w2.v = dict(mw.v)
+for (x,y,z),(c,j) in list(w2.v.items()):
+    if z == 2: w2.v[(x,y,z)] = (GOLD_BASE, j)
+w3 = Model(); w3.v = dict(w2.v)
+for (x,y,z),(c,j) in list(w3.v.items()):
+    if z == 2: w3.v[(x,y,z)] = ('#8fb8d6', j)
+M['muro@2'] = (w2, n); M['muro@3'] = (w3, n)
 meta={}
 for name,(mdl,n) in M.items():
     img,ox,oy = render(mdl)
-    img.save(os.path.join(OUT,f'v-{name}.png'))
+    img.save(os.path.join(OUT,f"v-{name.replace('@','-t')}.png"))
     meta[name]={'w':img.width,'h':img.height,'ox':ox,'oy':oy,'n':n}
 json.dump(meta,open(os.path.join(OUT,'meta.json'),'w'),indent=0)
 print(json.dumps(meta))

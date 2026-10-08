@@ -30,7 +30,7 @@ export default function Explain({ id }: { id: string }) {
       const r = await correctExplanation(state.settings.apiKey, card.front, card.back, answer);
       setResult(r);
       const good = r.score >= 7 ? 1 : 0;
-      update((s) => finishSession(s, good * 3, 3, Date.now()).state);
+      update((s) => finishSession(s, good * 3, 3, Date.now(), 'game').state);
     } catch (e) {
       const { describeAiError } = await import('../ai/claude');
       setErr(describeAiError(e));
@@ -57,7 +57,7 @@ export default function Explain({ id }: { id: string }) {
 
   return (
     <main className="screen" style={{ paddingBottom: 32 }}>
-      <Header back={`#/estudio/${id}`} title="Explícalo tú" />
+      <Header back={`#/estudio/${id}/juegos`} title="Explícalo tú" />
       <div>
         <div className="muted">Explica con tus palabras:</div>
         <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: 30 }}>{card.front}</div>

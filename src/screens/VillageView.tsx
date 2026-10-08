@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { useApp } from '../data/store';
-import { build, collect, cracks, linkDefense, moveBuilding, studyMemory, upgradeBuilding, upgradeLab } from '../data/actions';
+import { build, collect, cracks, linkDefense, moveBuilding, REMOVE_COST, removeObstacle, studyMemory, upgradeBuilding, upgradeLab } from '../data/actions';
 import { builders, busyBuilders, canUpgrade, labUpgradeCost, maxLevel, mineAvailable, mineCap, townHallLevel, upgradeCost, upgradeMinutes } from '../logic/economy';
 import { formatWait, useNow } from '../hooks';
 import { uid } from '../data/db';
 import { attacksLeft, dayKey, levelInfo } from '../logic/rewards';
-import { CATALOG, count, findSpot, GRID, isFree, size, sprite } from '../logic/village';
+import { canBuild, CATALOG, count, findSpot, GRID, isFree, project, size, sprite, spriteFor } from '../logic/village';
 import { Coins, Nav } from '../components/ui';
 import IsoMap from '../components/IsoMap';
 
 type Mode = { kind: 'view' } | { kind: 'shop' } | { kind: 'sel'; id: string } | { kind: 'place'; type: string; i: number; j: number; moveId?: string };
 
-const SHOP = ['canon', 'arqueras', 'catapulta', 'ballesta', 'muro', 'mina', 'almacen', 'cuartel', 'laboratorio', 'cabana', 'arbol'];
+const SHOP = ['canon', 'arqueras', 'catapulta', 'ballesta', 'torre_magica', 'muro', 'mina', 'almacen', 'cuartel', 'laboratorio', 'cabana', 'arbol', 'flores', 'farol', 'bandera', 'estatua', 'fuente'];
 const UPGRADE_MSG = { max: 'NIVEL MÁXIMO (SUBE EL AYUNTAMIENTO)', coins: 'TE FALTAN MONEDAS', builders: 'TODOS LOS CONSTRUCTORES OCUPADOS', busy: 'YA ESTÁ EN OBRAS' } as const;
 
 export default function VillageView() {
@@ -92,6 +92,14 @@ export default function VillageView() {
             (b.upgradeUntil ?? 0) > now ? { filter: 'sepia(0.7) brightness(0.9)' } : CATALOG[b.type].defense && (power(b.studyId) ?? 100) < 50 ? { filter: 'saturate(0.6) brightness(0.8)' } : undefined
           }
         >
+          {(() => {
+            const barracks = v.buildings.find((b) => b.type === 'cuartel');
+            if (!barracks || v.troops === 0) return null;
+            const p = project(barracks.i + 3, barracks.j + 1);
+            return Array.from({ length: Math.min(8, v.troops) }, (_, k) => (
+              <img key={k} src="img/iso/v-arquera.png" alt="" style={{ position: 'absolute', left: p.x - 30 + (k % 4) * 9 + (k >= 4 ? 4 : 0), top: p.y - 6 + (k >= 4 ? 7 : 0), width: 10, height: 22, pointerEvents: 'none' }} />
+            ));
+          })()}
           {grietas > 0 && (
             <>
               <img className="ghostfog" src="img/sprites/s-niebla.svg" alt="" style={{ left: 336, top: 8, width: 40, height: 40, opacity: 0.75 }} />
@@ -176,7 +184,8 @@ export default function VillageView() {
               {SHOP.map((t) => {
                 const c = CATALOG[t];
                 const n = count(v.buildings, t);
-                const ok = n < c.max && state.wallet.coins >= c.cost;
+                const locked = canBuild(v.buildings, 1e9, t, -1, -1, state.progress.achievements) === 'locked';
+                const ok = !locked && n < c.max && state.wallet.coins >= c.cost;
                 return (
                   <button
                     key={t}
@@ -191,8 +200,8 @@ export default function VillageView() {
                   >
                     <img src={sprite(t).src} alt="" style={{ height: 44, width: 'auto' }} />
                     <span style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: 13, lineHeight: 1.1, textAlign: 'center' }}>{c.name}</span>
-                    <span className="vt" style={{ fontSize: 17, color: 'var(--blue-sh)' }}>
-                      {c.cost} · {n}/{c.max}
+                    <span className="vt" style={{ fontSize: 17, color: locked ? '#a8695a' : 'var(--blue-sh)' }}>
+                      {locked ? (c.minTH ? `AYTO NV ${c.minTH}` : 'LOGRO') : `${c.cost} · ${n}/${c.max}`}
                     </span>
                   </button>
                 );
@@ -247,7 +256,7 @@ export default function VillageView() {
         {sel && (
           <>
             <div className="px row" style={{ padding: 14, gap: 14 }}>
-              <img src={sprite(sel.type).src} alt="" style={{ height: 64, width: 'auto' }} />
+              <img src={spriteFor(sel.type, sel.level).src} alt="" style={{ height: 64, width: 'auto' }} />
               <div className="grow">
                 <h2 style={{ fontSize: 18 }}>{CATALOG[sel.type].name}</h2>
                 <div className="vt" style={{ color: 'var(--blue-sh)', fontSize: 18 }}>
@@ -257,6 +266,26 @@ export default function VillageView() {
                 <div style={{ fontSize: 13, lineHeight: 1.35, color: 'var(--ink-soft)' }}>{CATALOG[sel.type].desc}</div>
               </div>
             </div>
+            {(sel.type === 'arbol' || sel.type === 'roca') && (
+              <div className="lcd row" style={{ padding: 14, fontSize: 19 }}>
+                <span className="grow">QUITARLO DEJA SITIO · A VECES ESCONDE UN CRISTAL</span>
+                <button
+                  className="btn gold"
+                  disabled={state.wallet.coins < REMOVE_COST}
+                  style={{ minHeight: 40, padding: '6px 12px' }}
+                  onClick={() => {
+                    const luck = Math.random();
+                    const now2 = Date.now();
+                    const r = removeObstacle(state, sel.id, luck, now2);
+                    update((s) => removeObstacle(s, sel.id, luck, now2).state);
+                    setNote(r.gem ? '¡Había un cristal escondido!' : `${CATALOG[sel.type].name} quitado.`);
+                    setMode({ kind: 'view' });
+                  }}
+                >
+                  Quitar · {REMOVE_COST}
+                </button>
+              </div>
+            )}
             {sel.type === 'mina' && (
               <div className="lcd row" style={{ padding: 14, fontSize: 19 }}>
                 <img src="img/sprites/s-moneda.svg" alt="" width={26} height={26} />

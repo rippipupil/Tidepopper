@@ -52,8 +52,8 @@ export default function TimeAttack({ id }: { id: string }) {
       return;
     }
     const now = Date.now();
-    const { reward } = finishSession(state, correct, quiz.length, now);
-    update((s) => finishSession(s, correct, quiz.length, now).state);
+    const { reward } = finishSession(state, correct, quiz.length, now, 'game');
+    update((s) => finishSession(s, correct, quiz.length, now, 'game').state);
     go(rewardUrl(id, correct, quiz.length, reward));
   };
   const msg = picked === item.answer ? `¡BIEN! +${60 + time * 10}` : picked !== null ? 'CASI. ERA LA OTRA' : time === 0 ? '¡TIEMPO!' : 'ELIGE ANTES DE QUE SE ACABE';
@@ -61,7 +61,7 @@ export default function TimeAttack({ id }: { id: string }) {
 
   return (
     <main className="screen" style={{ paddingBottom: 32 }}>
-      <Header back={`#/estudio/${id}`} title="Contrarreloj">
+      <Header back={`#/estudio/${id}/juegos`} title="Contrarreloj">
         <span className="vt" style={{ fontSize: 24, color: 'var(--glow)' }}>
           {score} PTS
         </span>

@@ -13,7 +13,17 @@ App de estudio personal (web y móvil) en pixel art 3D. Estudias con tus propios
 - **Mis estudios:** carpetas de colores, una por tema.
 - **Añadir apuntes:** PDF, fotos (de la cámara o la galería), texto pegado o tarjetas a mano. La IA (Claude) lee los PDF y las fotos directamente y crea un **resumen** y **tarjetas de repaso**.
 - **Flashcards con repetición espaciada:** cada tarjeta vuelve justo antes de que la olvides (*No la sabía · Dudé · La sabía*).
-- **Contrarreloj:** un término y 4 definiciones, con 10 segundos para elegir.
+- **Minijuegos** (con las tarjetas de cada estudio):
+  - **Contrarreloj:** elige la definición en 10 s.
+  - **Parejas:** une cada término con su definición.
+  - **Escribe:** lee la definición y escribe el término. Perdona tildes y una errata.
+  - **Verdadero o falso:** 30 segundos, todas las que puedas.
+  - **Ordena las letras:** forma el término con sus letras.
+  - **Explícalo tú:** la IA corrige tu explicación.
+- **Modo mixto:** 10 rondas al azar de tipo test, verdadero o falso, escribir y ordenar, sin repetir tipo seguido.
+- **Dibujar letras:** si estudias un idioma con otro alfabeto (hiragana, katakana, cirílico, griego o hangul), dibujas cada letra con el dedo y la app compara tu trazo con la letra real. Se puede activar una guía.
+- **Misiones diarias:** 3 cada día (repasar, jugar, dibujar, hacer un examen…), con monedas y un cristal si haces las tres.
+- **Logros:** 12 logros con cristales; algunos desbloquean decoraciones para la aldea.
 - **Exámenes:**
   - *Rápido:* sale de tus tarjetas, sin IA.
   - *Completo con IA:* preguntas tipo test y de desarrollo; la IA corrige y explica.
@@ -29,6 +39,12 @@ App de estudio personal (web y móvil) en pixel art 3D. Estudias con tus propios
   - Cada edificio sube de nivel con monedas y tiempo de obra, como mucho un nivel por encima del ayuntamiento.
   - Cada cabaña es un constructor.
   - **Cada sesión de estudio acelera las obras 30 min.**
+- **Aldea con más vida:**
+  - Torre mágica (necesita el ayuntamiento a nivel 2).
+  - Decoraciones: flores, farol, bandera, estatua y fuente.
+  - Los edificios cambian de aspecto al subir de nivel: base dorada en el nivel 3 y cristal en el nivel 5.
+  - Las tropas se ven junto al cuartel.
+  - Se pueden quitar rocas y árboles, que a veces esconden un cristal.
 - **Mina:** produce monedas cada hora, pero solo se puede vaciar los días que estudias.
 - **Laboratorio:** con cristales, tus tropas destruyen más en los ataques.
 - **La Niebla del Olvido:** cada día nuevo, si tienes tarjetas sin repasar, ataca. Roba más cuanto más débiles sean tus defensas, y los muros ayudan. Te deja un informe.

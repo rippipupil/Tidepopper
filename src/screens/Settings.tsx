@@ -44,6 +44,11 @@ export default function Settings() {
         </div>
       </div>
 
+      <a className="btn ghost" href="#/logros">
+        <img src="img/sprites/s-xp.svg" alt="" width={22} height={22} />
+        Logros
+      </a>
+
       <section className="px" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <h2>Clave de Claude</h2>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>

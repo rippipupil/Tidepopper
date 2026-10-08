@@ -1,12 +1,12 @@
 import { useApp } from '../data/store';
-import { cracks, studyMemory } from '../data/actions';
+import { claimMission, cracks, missionsToday, studyMemory } from '../data/actions';
 import { sessionQueue } from '../logic/srs';
 import { levelInfo } from '../logic/rewards';
 import { daysUntil } from '../logic/exam';
 import { Coins, folderIcon, icon, Nav } from '../components/ui';
 
 export default function Home() {
-  const { state } = useApp();
+  const { state, update } = useApp();
   const now = Date.now();
   const lvl = levelInfo(state.wallet.xp);
   const next = state.studies
@@ -79,6 +79,34 @@ export default function Home() {
           </span>
         </a>
       )}
+
+      <section className="lcd" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="row" style={{ fontSize: 19 }}>
+          <span className="grow">&gt; MISIONES DE HOY</span>
+          <a href="#/logros" style={{ fontSize: 17 }}>
+            LOGROS
+          </a>
+        </div>
+        {missionsToday(state, now).map((m) => (
+          <div key={m.id} className="row" style={{ gap: 10, fontSize: 18 }}>
+            <span className="grow" style={{ fontFamily: 'var(--f-body)', fontSize: 14, color: m.claimed ? 'var(--dim)' : 'var(--text)', textDecoration: m.claimed ? 'line-through' : undefined }}>
+              {m.text}
+            </span>
+            {m.claimed ? (
+              <span style={{ color: 'var(--mint)' }}>HECHA</span>
+            ) : m.done ? (
+              <button className="btn gold" style={{ minHeight: 34, padding: '2px 10px', fontSize: 13 }} onClick={() => update((s) => claimMission(s, m.id, Date.now()))}>
+                +{m.coins}
+              </button>
+            ) : (
+              <span style={{ color: 'var(--dim)' }}>
+                {m.value}/{m.goal}
+              </span>
+            )}
+          </div>
+        ))}
+        <div style={{ fontSize: 16, color: 'var(--dim)' }}>LAS 3 HECHAS: +1 CRISTAL</div>
+      </section>
 
       <section>
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: 4 }}>

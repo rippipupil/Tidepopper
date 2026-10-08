@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Placed } from '../data/types';
-import { drawOrder, GRID, ORIGIN, project, size, sprite } from '../logic/village';
+import { drawOrder, GRID, ORIGIN, project, size, sprite, spriteFor } from '../logic/village';
 
 export const MAP_W = 386;
 export const MAP_H = 242;
@@ -67,7 +67,7 @@ export default function IsoMap({ buildings, zoom = 1, selectedId, ghost, onBuild
   const sel = buildings.find((b) => b.id === selectedId);
 
   useEffect(() => {
-    const srcs = Array.from(new Set(buildings.map((b) => sprite(b.type).src)));
+    const srcs = Array.from(new Set(buildings.map((b) => spriteFor(b.type, b.level).src)));
     void Promise.all(srcs.map(loadMask)).then(() => setLoaded((x) => x + 1));
   }, [buildings]);
 
@@ -75,7 +75,7 @@ export default function IsoMap({ buildings, zoom = 1, selectedId, ghost, onBuild
   const hit = (x: number, y: number): Placed | null => {
     for (let k = order.length - 1; k >= 0; k--) {
       const b = order[k];
-      const s = sprite(b.type);
+      const s = spriteFor(b.type, b.level);
       const p = project(b.i, b.j);
       const lx = Math.floor(x - (p.x - s.ox));
       const ly = Math.floor(y - (p.y - s.oy));
@@ -107,7 +107,7 @@ export default function IsoMap({ buildings, zoom = 1, selectedId, ghost, onBuild
         {sel && <div style={{ ...footprint(sel.i, sel.j, size(sel.type)), background: 'rgba(217,192,138,0.55)' }} />}
         {ghost && <div style={{ ...footprint(ghost.i, ghost.j, size(ghost.type)), background: ghost.ok ? 'rgba(140,197,176,0.65)' : 'rgba(212,144,127,0.75)' }} />}
         {order.map((b) => {
-          const s = sprite(b.type);
+          const s = spriteFor(b.type, b.level);
           const p = project(b.i, b.j);
           const style: React.CSSProperties = { position: 'absolute', left: p.x - s.ox, top: p.y - s.oy, width: s.w, height: s.h, border: 0, padding: 0, background: 'none', pointerEvents: 'none', ...buildingStyle?.(b) };
           // Botón para teclado y lector de pantalla; el ratón y el dedo pasan por el detector de píxeles.

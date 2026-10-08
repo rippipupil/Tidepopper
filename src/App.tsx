@@ -19,6 +19,14 @@ import CourseView from './screens/CourseView';
 import LevelView from './screens/LevelView';
 import Chat from './screens/Chat';
 import RaidReport from './screens/RaidReport';
+import Achievements from './screens/Achievements';
+import GamesHub from './screens/games/GamesHub';
+import Pairs from './screens/games/Pairs';
+import Write from './screens/games/Write';
+import TrueFalse from './screens/games/TrueFalse';
+import Anagram from './screens/games/Anagram';
+import Mixed from './screens/games/Mixed';
+import Draw from './screens/games/Draw';
 
 export default function App() {
   const { ready, update } = useApp();
@@ -46,6 +54,7 @@ export default function App() {
     return <CourseView id={id} />;
   }
   if (a === 'asalto') return <RaidReport />;
+  if (a === 'logros') return <Achievements />;
   if (a === 'estudios') return <Studies startNew={query.get('nuevo') === '1'} />;
   if (a === 'estudio' && id) {
     if (sub === 'anadir') return <AddSources id={id} />;
@@ -55,6 +64,13 @@ export default function App() {
     if (sub === 'explica') return <Explain id={id} />;
     if (sub === 'examen') return <Exam key={id} id={id} />;
     if (sub === 'chat') return <Chat key={id} id={id} initial={query.get('q') ?? ''} />;
+    if (sub === 'juegos') return <GamesHub id={id} />;
+    if (sub === 'parejas') return <Pairs id={id} />;
+    if (sub === 'escribe') return <Write id={id} />;
+    if (sub === 'vof') return <TrueFalse id={id} />;
+    if (sub === 'ordena') return <Anagram id={id} />;
+    if (sub === 'mixto') return <Mixed id={id} />;
+    if (sub === 'dibujar') return <Draw id={id} />;
     return <StudyView id={id} />;
   }
   if (a === 'recompensa') return <RewardView q={query} />;

@@ -83,20 +83,20 @@ export default function StudyView({ id }: { id: string }) {
             <img src={icon('doc')} alt="" style={{ width: 48, height: 48 }} />
             Resumen
           </a>
-          <a href={enough ? `#/estudio/${id}/contrarreloj` : undefined} aria-disabled={!enough} className="px tile" style={{ minHeight: 120, opacity: enough ? 1 : 0.5 }}>
+          <a href={cards.length ? `#/estudio/${id}/juegos` : undefined} aria-disabled={!cards.length} className="px tile" style={{ minHeight: 120, opacity: cards.length ? 1 : 0.5 }}>
             <img src={icon('timer')} alt="" style={{ width: 48, height: 48 }} />
-            Contrarreloj
+            Minijuegos
           </a>
-          <a href={cards.length ? `#/estudio/${id}/explica` : undefined} aria-disabled={!cards.length} className="px tile" style={{ minHeight: 120, opacity: cards.length ? 1 : 0.5 }}>
+          <a href={enough ? `#/estudio/${id}/mixto` : undefined} aria-disabled={!enough} className="lcd tile" style={{ minHeight: 120, opacity: enough ? 1 : 0.5, color: 'var(--gold)' }}>
             <img src={icon('ai')} alt="" style={{ width: 48, height: 48 }} />
-            Explícalo tú
+            Modo mixto
           </a>
         </div>
         <a className="btn ghost" href={`#/estudio/${id}/chat`}>
           <img src={icon('ai')} alt="" width={22} height={22} />
           Preguntar al asistente
         </a>
-        {!enough && cards.length > 0 && <p className="muted" style={{ margin: 0 }}>El Contrarreloj necesita al menos 4 tarjetas.</p>}
+        {!enough && cards.length > 0 && <p className="muted" style={{ margin: 0 }}>El modo mixto necesita al menos 4 tarjetas.</p>}
       </section>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

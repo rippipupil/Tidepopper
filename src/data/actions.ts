@@ -1,4 +1,6 @@
-import type { AppState, Card, ChatMsg, Course, ExamRecord, FolderColor, Grade, LevelContent, Source, Study } from './types';
+import type { AppState, Card, ChatMsg, Course, ExamRecord, FolderColor, Grade, LevelContent, Source, StatKey, Study } from './types';
+import { ACHIEVEMENTS, ALL_MISSIONS_GEMS, bump, dailyMissions, emptyProgress, rollDay } from '../logic/progress';
+import { townHallLevel } from '../logic/economy';
 import { completeLevel } from '../logic/course';
 import { collectMine, labUpgradeCost, maybeRaid, SESSION_SPEEDUP, settleUpgrades, speedUp, startUpgrade } from '../logic/economy';
 import { examReward } from '../logic/exam';
@@ -14,6 +16,7 @@ export function initialState(): AppState {
     cards: [],
     exams: [],
     chats: {},
+    progress: emptyProgress(),
     wallet: { coins: 300, gems: 0, xp: 0 },
     village: startingVillage(),
     streak: { lastDay: '', days: 0 },
@@ -25,7 +28,14 @@ export function initialState(): AppState {
 export function hydrate(saved: Partial<AppState> | undefined): AppState {
   const base = initialState();
   if (!saved) return base;
-  return { ...base, ...saved, wallet: { ...base.wallet, ...saved.wallet }, village: { ...base.village, ...saved.village }, settings: { ...base.settings, ...saved.settings } };
+  return {
+    ...base,
+    ...saved,
+    wallet: { ...base.wallet, ...saved.wallet },
+    village: { ...base.village, ...saved.village },
+    settings: { ...base.settings, ...saved.settings },
+    progress: { ...base.progress, ...saved.progress, totals: { ...base.progress.totals, ...saved.progress?.totals }, today: { ...base.progress.today, ...saved.progress?.today } },
+  };
 }
 
 export function createStudy(s: AppState, name: string, color: FolderColor, now: number, id: string): AppState {
@@ -67,14 +77,23 @@ export function gradeCard(s: AppState, cardId: string, grade: Grade, now: number
   return { ...s, cards: s.cards.map((c) => (c.id === cardId ? { ...c, sched: review(c.sched, grade, now) } : c)) };
 }
 
-/** Cierra una sesión de estudio: racha, recompensa y tropas. */
-export function finishSession(s: AppState, correct: number, total: number, now: number): { state: AppState; reward: Reward } {
+export type SessionKind = 'review' | 'game' | 'mixed' | 'letters' | 'level';
+
+/** Suma a las estadísticas (misiones y logros). */
+export function record(s: AppState, key: StatKey, n: number, now: number): AppState {
+  return n > 0 ? { ...s, progress: bump(s.progress, dayKey(now), key, n) } : s;
+}
+
+/** Cierra una sesión de estudio: racha, recompensa, tropas, obras más rápidas y estadísticas. */
+export function finishSession(s: AppState, correct: number, total: number, now: number, kind: SessionKind = 'review'): { state: AppState; reward: Reward } {
   const streak = touchStreak(s.streak, dayKey(now));
   const reward = sessionReward({ correct, total }, streak.days);
-  return {
-    reward,
-    state: { ...s, streak, wallet: applyReward(s.wallet, reward), village: settleUpgrades(speedUp(trainTroops(s.village, correct), SESSION_SPEEDUP), now) },
-  };
+  let state: AppState = { ...s, streak, wallet: applyReward(s.wallet, reward), village: settleUpgrades(speedUp(trainTroops(s.village, correct), SESSION_SPEEDUP), now) };
+  if (kind === 'review') state = record(state, 'reviews', total, now);
+  if (kind === 'game' || kind === 'mixed') state = record(state, 'games', 1, now);
+  if (kind === 'mixed') state = record(state, 'mixed', 1, now);
+  if (kind === 'letters') state = record(state, 'letters', correct, now);
+  return { reward, state };
 }
 
 export function studyCards(s: AppState, studyId: string): Card[] {
@@ -90,12 +109,12 @@ export function cracks(s: AppState, now: number): number {
 }
 
 export function build(s: AppState, type: string, i: number, j: number, id: string, now = Date.now()): { state: AppState; error: BuildError | null } {
-  const error = canBuild(s.village.buildings, s.wallet.coins, type, i, j);
+  const error = canBuild(s.village.buildings, s.wallet.coins, type, i, j, s.progress.achievements);
   if (error) return { state: s, error };
   const placed = { id, type, i, j, level: 1, collectedAt: type === 'mina' ? now : undefined };
   return {
     error: null,
-    state: { ...s, wallet: { ...s.wallet, coins: s.wallet.coins - CATALOG[type].cost }, village: { ...s.village, buildings: [...s.village.buildings, placed] } },
+    state: record({ ...s, wallet: { ...s.wallet, coins: s.wallet.coins - CATALOG[type].cost }, village: { ...s.village, buildings: [...s.village.buildings, placed] } }, 'built', 1, now),
   };
 }
 
@@ -114,11 +133,11 @@ export function beginAttack(s: AppState, now: number): AppState | null {
   return v ? { ...s, village: v } : null;
 }
 
-export function endAttack(s: AppState, destroyedPct: number, troopsUsed: number): { state: AppState; loot: number } {
+export function endAttack(s: AppState, destroyedPct: number, troopsUsed: number, now = Date.now()): { state: AppState; loot: number } {
   const loot = attackLoot(destroyedPct);
   return {
     loot,
-    state: { ...s, wallet: { ...s.wallet, coins: s.wallet.coins + loot }, village: { ...s.village, troops: Math.max(0, s.village.troops - troopsUsed) } },
+    state: record({ ...s, wallet: { ...s.wallet, coins: s.wallet.coins + loot }, village: { ...s.village, troops: Math.max(0, s.village.troops - troopsUsed) } }, 'attacks', 1, now),
   };
 }
 
@@ -132,7 +151,12 @@ export function finishExam(s: AppState, record: ExamRecord, now: number): { stat
   const reward = examReward(record.score, streak.days);
   return {
     reward,
-    state: { ...s, streak, exams: [...s.exams, record], wallet: applyReward(s.wallet, reward), village: settleUpgrades(speedUp(trainTroops(s.village, record.correct), SESSION_SPEEDUP), now) },
+    state: (() => {
+      let st: AppState = { ...s, streak, exams: [...s.exams, record], wallet: applyReward(s.wallet, reward), village: settleUpgrades(speedUp(trainTroops(s.village, record.correct), SESSION_SPEEDUP), now) };
+      st = recordStat(st, 'exams', 1, now);
+      if (record.score >= 5) st = recordStat(st, 'examsPassed', 1, now);
+      return { ...st, progress: { ...st.progress, bestExam: Math.max(st.progress.bestExam, record.score) } };
+    })(),
   };
 }
 
@@ -171,8 +195,9 @@ export function finishLevel(s: AppState, studyId: string, i: number, correct: nu
     next = addCards(next, studyId, lv.content.cards, now, ids);
     next = mapCourse(next, studyId, (c) => ({ course: { ...c, levels: c.levels.map((l, k) => (k === i ? { ...l, cardsAdded: true } : l)) } }));
   }
-  const done = finishSession(next, correct, total, now);
-  return { state: done.state, reward: done.reward, passed: r.passed, stars: r.stars };
+  const done = finishSession(next, correct, total, now, 'level');
+  const state = r.firstPass ? record(done.state, 'levels', 1, now) : done.state;
+  return { state, reward: done.reward, passed: r.passed, stars: r.stars };
 }
 
 export function addChat(s: AppState, studyId: string, msg: ChatMsg): AppState {
@@ -222,4 +247,58 @@ export function daily(s: AppState, now: number): AppState {
 
 export function markRaidSeen(s: AppState): AppState {
   return s.village.raid ? { ...s, village: { ...s.village, raid: { ...s.village.raid, seen: true } } } : s;
+}
+
+const recordStat = (s: AppState, key: StatKey, n: number, now: number) => record(s, key, n, now);
+
+// ---------- Misiones diarias y logros ----------
+
+export function missionsToday(s: AppState, now: number) {
+  const day = dayKey(now);
+  const p = rollDay(s.progress, day);
+  return dailyMissions(day).map((m) => ({ ...m, value: Math.min(m.goal, p.today[m.key]), done: p.today[m.key] >= m.goal, claimed: p.missionsClaimed.includes(m.id) }));
+}
+
+/** Cobra una misión cumplida; al cobrar las tres, un cristal extra. */
+export function claimMission(s: AppState, id: string, now: number): AppState {
+  const day = dayKey(now);
+  const list = missionsToday(s, now);
+  const m = list.find((x) => x.id === id);
+  if (!m || !m.done || m.claimed) return s;
+  const p = rollDay(s.progress, day);
+  const claimed = [...p.missionsClaimed, id];
+  const bonus = claimed.length === list.length ? ALL_MISSIONS_GEMS : 0;
+  return { ...s, progress: { ...p, missionsClaimed: claimed }, wallet: { ...s.wallet, coins: s.wallet.coins + m.coins, gems: s.wallet.gems + bonus } };
+}
+
+export function achievementsStatus(s: AppState) {
+  const extra = { streak: s.streak.days, studies: s.studies.length, courses: s.studies.filter((x) => x.course).length, thLevel: townHallLevel(s.village.buildings) };
+  return ACHIEVEMENTS.map((a) => ({ ...a, done: a.done(s.progress, extra), claimed: s.progress.achievements.includes(a.id) }));
+}
+
+export function claimAchievement(s: AppState, id: string): AppState {
+  const a = achievementsStatus(s).find((x) => x.id === id);
+  if (!a || !a.done || a.claimed) return s;
+  return { ...s, progress: { ...s.progress, achievements: [...s.progress.achievements, id] }, wallet: { ...s.wallet, gems: s.wallet.gems + a.gems } };
+}
+
+export const REMOVE_COST = 20;
+
+/** Quitar un árbol o una roca cuesta monedas y a veces deja un cristal (`luck` en [0, 1)). */
+export function removeObstacle(s: AppState, id: string, luck: number, now: number): { state: AppState; gem: boolean } {
+  const b = s.village.buildings.find((x) => x.id === id);
+  if (!b || (b.type !== 'arbol' && b.type !== 'roca') || s.wallet.coins < REMOVE_COST) return { state: s, gem: false };
+  const gem = luck < 0.3;
+  const state = record(
+    { ...s, wallet: { ...s.wallet, coins: s.wallet.coins - REMOVE_COST, gems: s.wallet.gems + (gem ? 1 : 0) }, village: { ...s.village, buildings: s.village.buildings.filter((x) => x.id !== id) } },
+    'removed',
+    1,
+    now,
+  );
+  return { state, gem };
+}
+
+/** Elegir alfabeto para el juego de dibujar letras de un estudio. */
+export function setAlphabet(s: AppState, studyId: string, alphabet: string | undefined): AppState {
+  return { ...s, studies: s.studies.map((x) => (x.id === studyId ? { ...x, alphabet } : x)) };
 }

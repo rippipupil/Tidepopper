@@ -16,6 +16,9 @@ export interface BuildingType {
   defense: boolean;
   shop: boolean;
   desc: string;
+  minTH?: number; // nivel de ayuntamiento necesario
+  unlock?: string; // logro necesario
+  decor?: boolean;
 }
 
 export const CATALOG: Record<string, BuildingType> = {
@@ -30,7 +33,13 @@ export const CATALOG: Record<string, BuildingType> = {
   cuartel: { type: 'cuartel', name: 'Cuartel', cost: 300, max: 1, defense: false, shop: true, desc: 'Aquí esperan tus tropas. Se entrenan estudiando: 10 aciertos, una tropa.' },
   laboratorio: { type: 'laboratorio', name: 'Laboratorio', cost: 800, max: 1, defense: false, shop: true, desc: 'Usa cristales para mejorar tropas y defensas.' },
   cabana: { type: 'cabana', name: 'Cabaña', cost: 500, max: 2, defense: false, shop: true, desc: 'Aquí vive un constructor. Cada cabaña es una obra a la vez.' },
-  arbol: { type: 'arbol', name: 'Árbol', cost: 10, max: 12, defense: false, shop: true, desc: 'Decoración.' },
+  torre_magica: { type: 'torre_magica', name: 'Torre mágica', cost: 900, max: 1, defense: true, shop: true, minTH: 2, desc: 'Lanza rayos de cristal que dañan a varios enemigos a la vez. Necesita el ayuntamiento a nivel 2.' },
+  arbol: { type: 'arbol', name: 'Árbol', cost: 10, max: 12, defense: false, shop: true, decor: true, desc: 'Decoración. Al quitarlo a veces aparece un cristal.' },
+  flores: { type: 'flores', name: 'Flores', cost: 15, max: 20, defense: false, shop: true, decor: true, unlock: 'sobre', desc: 'Decoración. Logro «Sobresaliente».' },
+  farol: { type: 'farol', name: 'Farol', cost: 30, max: 12, defense: false, shop: true, decor: true, unlock: 'rep100', desc: 'Decoración. Logro «Cien repasos».' },
+  bandera: { type: 'bandera', name: 'Bandera', cost: 40, max: 6, defense: false, shop: true, decor: true, unlock: 'racha7', desc: 'Decoración. Logro «Una semana».' },
+  estatua: { type: 'estatua', name: 'Estatua del saber', cost: 200, max: 1, defense: false, shop: true, decor: true, unlock: 'rep1000', desc: 'Decoración. Logro «Memoria de hierro».' },
+  fuente: { type: 'fuente', name: 'Fuente', cost: 250, max: 1, defense: false, shop: true, decor: true, unlock: 'racha30', desc: 'Decoración. Logro «Imparable».' },
   roca: { type: 'roca', name: 'Roca', cost: 0, max: 12, defense: false, shop: false, desc: 'Decoración.' },
 };
 
@@ -40,6 +49,13 @@ export function size(type: string): number {
 
 export function sprite(type: string): SpriteMeta & { src: string } {
   return { ...M[type], src: `img/iso/v-${type}.png` };
+}
+
+/** Sprite según el nivel: los niveles 3–4 y 5 tienen su propio aspecto. */
+export function spriteFor(type: string, level: number): SpriteMeta & { src: string } {
+  const tier = level >= 5 ? 3 : level >= 3 ? 2 : 1;
+  const key = tier > 1 && M[`${type}@${tier}`] ? `${type}@${tier}` : type;
+  return { ...M[key], src: `img/iso/v-${key.replace('@', '-t')}.png` };
 }
 
 /** Proyección isométrica: casilla (i, j) → punto de pantalla de su esquina superior. */
@@ -77,10 +93,12 @@ export function count(buildings: Placed[], type: string): number {
   return buildings.filter((b) => b.type === type).length;
 }
 
-export type BuildError = 'max' | 'coins' | 'blocked';
+export type BuildError = 'max' | 'coins' | 'blocked' | 'locked';
 
-export function canBuild(buildings: Placed[], coins: number, type: string, i: number, j: number): BuildError | null {
+export function canBuild(buildings: Placed[], coins: number, type: string, i: number, j: number, achievements: string[] = []): BuildError | null {
   const t = CATALOG[type];
+  const th = buildings.find((b) => b.type === 'ayuntamiento')?.level ?? 1;
+  if ((t.minTH && th < t.minTH) || (t.unlock && !achievements.includes(t.unlock))) return 'locked';
   if (count(buildings, type) >= t.max) return 'max';
   if (coins < t.cost) return 'coins';
   if (!isFree(buildings, type, i, j)) return 'blocked';
