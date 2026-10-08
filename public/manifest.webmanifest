@@ -1,0 +1,11 @@
+{
+  "name": "Tidepopper",
+  "short_name": "Tidepopper",
+  "description": "Estudia con tus apuntes y la IA, y construye tu aldea.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#17222f",
+  "theme_color": "#17222f",
+  "lang": "es",
+  "icons": [{ "src": "img/icons/i-app.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

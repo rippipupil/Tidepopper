@@ -1,0 +1,42 @@
+import { useApp } from './data/store';
+import { useRoute } from './router';
+import Home from './screens/Home';
+import Studies from './screens/Studies';
+import StudyView, { SummaryView } from './screens/StudyView';
+import AddSources from './screens/AddSources';
+import Review from './screens/Review';
+import RewardView from './screens/RewardView';
+import TimeAttack from './screens/TimeAttack';
+import Explain from './screens/Explain';
+import VillageView from './screens/VillageView';
+import Attack from './screens/Attack';
+import Settings from './screens/Settings';
+
+export default function App() {
+  const { ready } = useApp();
+  const { path, query } = useRoute();
+  if (!ready)
+    return (
+      <main className="screen">
+        <div className="lcd" style={{ padding: 18, fontSize: 22 }}>
+          &gt; CARGANDO…
+        </div>
+      </main>
+    );
+
+  const [a, id, sub] = path;
+  if (a === 'estudios') return <Studies startNew={query.get('nuevo') === '1'} />;
+  if (a === 'estudio' && id) {
+    if (sub === 'anadir') return <AddSources id={id} />;
+    if (sub === 'repaso') return <Review key={id} id={id} />;
+    if (sub === 'resumen') return <SummaryView id={id} />;
+    if (sub === 'contrarreloj') return <TimeAttack id={id} />;
+    if (sub === 'explica') return <Explain id={id} />;
+    return <StudyView id={id} />;
+  }
+  if (a === 'recompensa') return <RewardView q={query} />;
+  if (a === 'aldea') return <VillageView />;
+  if (a === 'ataque') return <Attack />;
+  if (a === 'ajustes') return <Settings />;
+  return <Home />;
+}

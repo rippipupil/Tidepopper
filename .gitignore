@@ -1,4 +1,7 @@
 node_modules/
 dist/
+www/
+android/
 .env
 .DS_Store
+*.tsbuildinfo
