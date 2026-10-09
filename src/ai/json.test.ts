@@ -18,3 +18,33 @@ describe('extractJson', () => {
     expect(() => extractJson('no sé')).toThrow();
   });
 });
+
+import { pruneInvalid, repairJson } from './json';
+import { z } from 'zod';
+
+describe('repairJson y pruneInvalid', () => {
+  const Step = z.object({ type: z.enum(['explica', 'elige', 'vf']), text: z.string(), options: z.array(z.string()), answer: z.number().int() });
+  const Lesson = z.object({ steps: z.array(Step), score: z.number().int().min(0).max(10) });
+  const schema = z.toJSONSchema(Lesson);
+
+  it('rellena campos que faltan y convierte tipos', () => {
+    const raw = { steps: [{ type: 'Explica', text: 'Hola' }, { type: 'vf', text: 'X', answer: true, options: 'a' }, { type: 'elige', text: 'P', options: ['a', 'b'], answer: '1' }], score: '12' };
+    const fixed = repairJson(raw, schema);
+    const ok = Lesson.safeParse(fixed);
+    expect(ok.success).toBe(true);
+    expect(ok.data!.steps[0]).toEqual({ type: 'explica', text: 'Hola', options: [], answer: -1 });
+    expect(ok.data!.steps[1].answer).toBe(1);
+    expect(ok.data!.steps[2].answer).toBe(1);
+    expect(ok.data!.score).toBe(10);
+  });
+
+  it('quita solo los elementos inválidos de una lista', () => {
+    const data = repairJson({ steps: [{ type: 'explica', text: 'a' }, { type: 'baile', text: 'b' }, { type: 'vf', text: 'c', answer: 0 }], score: 5 }, schema);
+    const first = Lesson.safeParse(data);
+    expect(first.success).toBe(false);
+    expect(pruneInvalid(data, first.error!.issues.map((i) => i.path))).toBe(true);
+    const second = Lesson.safeParse(data);
+    expect(second.success).toBe(true);
+    expect(second.data!.steps.map((s) => s.type)).toEqual(['explica', 'vf']);
+  });
+});

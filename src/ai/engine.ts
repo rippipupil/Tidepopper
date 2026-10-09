@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
-import { extractJson } from './json';
+import { compactSchema, extractJson, pruneInvalid, repairJson } from './json';
 import { AiCancelled, askManual } from './manual';
 
 // Las claves se guardan solo en este dispositivo (Perfil). La app es personal,
@@ -183,14 +183,26 @@ function geminiModels(key: string): Promise<string[]> {
   return p;
 }
 
-async function gemini(key: string, system: string, contents: unknown[], json: boolean, seconds = 120): Promise<string> {
+/** Claves cuyo Gemini no acepta el esquema JSON (se piden sin él). */
+const noSchema = new Set<string>();
+
+/** json: false = texto libre; true = JSON; un esquema = JSON que Gemini obliga a cumplir. */
+async function gemini(key: string, system: string, contents: unknown[], json: boolean | object, seconds = 120): Promise<string> {
   let last: Error = new AiError('sin modelo disponible');
   for (const model of await geminiModels(key)) {
-    const res = await post(`${GEMINI}/models/${model}:generateContent`, { 'x-goog-api-key': key }, {
-      systemInstruction: { parts: [{ text: system }] },
-      contents,
-      generationConfig: json ? { responseMimeType: 'application/json' } : {},
-    }, seconds);
+    const config = (withSchema: boolean) =>
+      json
+        ? { responseMimeType: 'application/json', ...(withSchema && typeof json === 'object' ? { responseJsonSchema: json } : {}) }
+        : {};
+    const send = (withSchema: boolean) =>
+      post(`${GEMINI}/models/${model}:generateContent`, { 'x-goog-api-key': key }, { systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: config(withSchema) }, seconds);
+    const useSchema = typeof json === 'object' && !noSchema.has(key);
+    let res = await send(useSchema);
+    if (useSchema && res.status === 400) {
+      // Algún modelo no acepta el esquema: se pide solo JSON y lo valida la app.
+      noSchema.add(key);
+      res = await send(false);
+    }
     if (res.status === 404 || res.status === 429 || res.status === 503) {
       // Modelo retirado, sin cuota o saturado: la cuota es por modelo, así que probamos otro.
       last = await httpError(res);
@@ -253,26 +265,32 @@ function jsonInstructions(schema: z.ZodType): string {
   );
 }
 
-/** Pide JSON, lo valida y, si no cumple el esquema, lo vuelve a pedir una vez explicando el fallo. */
+/**
+ * Pide JSON y lo valida. Antes de rechazarlo intenta arreglarlo (campos que faltan, tipos)
+ * y quitar los elementos sueltos que no valgan; si aun así no cumple, lo pide otra vez explicando el fallo.
+ */
 async function viaJson<T>(schema: z.ZodType<T>, ask: (fix: string) => Promise<string>): Promise<T> {
+  const js = z.toJSONSchema(schema);
   let fix = '';
+  let why = 'la respuesta no tenía el formato esperado';
   for (let attempt = 0; attempt < 2; attempt++) {
     const raw = await ask(fix);
     let data: unknown;
     try {
-      data = extractJson(raw);
+      data = repairJson(extractJson(raw), js);
     } catch {
-      fix = '\n\nTu respuesta anterior no era JSON válido. Devuelve solo el objeto JSON.';
+      fix = '\n\nTu respuesta anterior no era JSON válido o estaba cortada. Devuelve solo el objeto JSON completo, más breve si hace falta.';
+      why = 'la respuesta llegó cortada o no era JSON';
       continue;
     }
-    const ok = schema.safeParse(data);
+    let ok = schema.safeParse(data);
+    for (let k = 0; !ok.success && k < 5 && pruneInvalid(data, ok.error.issues.map((i) => i.path)); k++) ok = schema.safeParse(data);
     if (ok.success) return ok.data;
-    fix = `\n\nTu respuesta anterior no cumplía el esquema: ${ok.error.issues
-      .slice(0, 5)
-      .map((i) => `${i.path.join('.')}: ${i.message}`)
-      .join('; ')}. Corrígelo y devuelve solo el objeto JSON.`;
+    const issues = ok.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`);
+    fix = `\n\nTu respuesta anterior no cumplía el esquema: ${issues.join('; ')}. Corrígelo y devuelve solo el objeto JSON.`;
+    why = `la respuesta no tenía el formato esperado (${issues[0]})`;
   }
-  throw new AiError('la respuesta no tenía el formato esperado');
+  throw new AiError(why);
 }
 
 // ---------- Copiar y pegar ----------
@@ -299,7 +317,7 @@ async function structuredWith<T>(id: ProviderId, keys: AiKeys, r: StructuredReq<
   if (id === 'claude') return claudeStructured(keys.apiKey.trim(), r);
   const sys = r.system + jsonInstructions(r.schema);
   if (id === 'gemini')
-    return viaJson(r.schema, (fix) => gemini(keys.geminiKey!.trim(), sys, [{ role: 'user', parts: geminiParts(r.parts ?? [], r.user + fix) }], true));
+    return viaJson(r.schema, (fix) => gemini(keys.geminiKey!.trim(), sys, [{ role: 'user', parts: geminiParts(r.parts ?? [], r.user + fix) }], compactSchema(z.toJSONSchema(r.schema))));
   const sources = (r.parts ?? []).map((p) => (p.kind === 'text' ? `Fuente «${p.name}»:\n\n${p.text}\n\n` : '')).join('');
   return viaJson(r.schema, (fix) =>
     groq(keys.groqKey!.trim(), [
