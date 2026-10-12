@@ -14,6 +14,13 @@ describe('extractJson', () => {
     expect(extractJson('Claro. {"score": 7} Espero que ayude.')).toEqual({ score: 7 });
   });
 
+  it('no se confunde con bloques de código dentro del JSON', () => {
+    const obj = { markdown: '## Hola\n```mermaid\nflowchart TD\n  A --> B\n```\nfin' };
+    expect(extractJson(JSON.stringify(obj))).toEqual(obj);
+    expect(extractJson('```json\n' + JSON.stringify(obj) + '\n```')).toEqual(obj);
+    expect(extractJson('Aquí tienes:\n' + JSON.stringify(obj) + '\nSuerte')).toEqual(obj);
+  });
+
   it('falla si no hay JSON', () => {
     expect(() => extractJson('no sé')).toThrow();
   });

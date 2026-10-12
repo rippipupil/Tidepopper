@@ -1,97 +1,110 @@
 import { useState } from 'react';
 import { useApp } from '../data/store';
-import { finishSession, gradeCard, studyCards } from '../data/actions';
-import { sessionQueue } from '../logic/srs';
-import { go } from '../router';
-import type { Grade } from '../data/types';
-import { Header, Progress } from '../components/ui';
-import { Missing } from './StudyView';
+import { dueCards, memoryOf, statusCounts, studyQueue } from '../logic/learn';
+import type { Card } from '../data/types';
+import FlashSession from '../components/FlashSession';
+import { Bar, BottomNav, TopBar } from '../components/ui';
 
-export function rewardUrl(studyId: string, correct: number, total: number, r: { coins: number; xp: number; gems: number; stars: number }) {
-  return `/recompensa?e=${studyId}&ok=${correct}&t=${total}&c=${r.coins}&x=${r.xp}&g=${r.gems}&s=${r.stars}`;
-}
+/** Repaso diario: las tarjetas vencidas de todas tus notas, justo antes de olvidarlas. */
+export default function Review() {
+  const { state } = useApp();
+  const now = Date.now();
+  const due = dueCards(state.cards, now);
+  const [session, setSession] = useState<Card[] | null>(null);
+  const [result, setResult] = useState<{ known: number; total: number } | null>(null);
+  const counts = statusCounts(state.cards);
+  const fresh = studyQueue(state.cards, now, 20).filter((c) => !due.includes(c));
 
-const GRADES: { g: Grade; label: string; bg: string }[] = [
-  { g: 'again', label: 'No la sabía', bg: 'var(--coral)' },
-  { g: 'hard', label: 'Dudé', bg: 'var(--gold)' },
-  { g: 'good', label: 'La sabía', bg: 'var(--mint)' },
-];
-
-export default function Review({ id }: { id: string }) {
-  const { state, update } = useApp();
-  const study = state.studies.find((s) => s.id === id);
-  const [queue] = useState(() => sessionQueue(studyCards(state, id), Date.now()));
-  const [pos, setPos] = useState(0);
-  const [shown, setShown] = useState(false);
-  const [correct, setCorrect] = useState(0);
-  if (!study) return <Missing />;
-
-  if (queue.length === 0)
-    return (
-      <main className="screen">
-        <Header back={`#/estudio/${id}`} title={study.name} />
-        <div className="lcd" style={{ padding: 18, fontSize: 20 }}>
-          &gt; NADA PENDIENTE. ¡TODO AL DÍA!
-        </div>
-        <a className="btn" href={`#/estudio/${id}/anadir`}>
-          Añadir más apuntes
-        </a>
-      </main>
-    );
-
-  const card = queue[pos];
-  const grade = (g: Grade) => {
-    const ok = correct + (g === 'again' ? 0 : 1);
-    update((s) => gradeCard(s, card.id, g, Date.now()));
-    if (pos + 1 < queue.length) {
-      setCorrect(ok);
-      setPos(pos + 1);
-      setShown(false);
-      return;
-    }
-    // La recompensa solo depende de la racha y la cartera, no de las tarjetas,
-    // así que se puede calcular ya; el estado se aplica con su propia actualización.
-    const now = Date.now();
-    const { reward } = finishSession(state, ok, queue.length, now);
-    update((s) => finishSession(s, ok, queue.length, now).state);
-    go(rewardUrl(id, ok, queue.length, reward));
-  };
+  const perNote = state.notes
+    .map((n) => {
+      const cards = state.cards.filter((c) => c.noteId === n.id);
+      return { note: n, cards, due: due.filter((c) => c.noteId === n.id).length, mem: memoryOf(cards) };
+    })
+    .filter((x) => x.cards.length)
+    .sort((a, b) => b.due - a.due || a.mem - b.mem);
 
   return (
-    <main className="screen" style={{ paddingBottom: 32 }}>
-      <Header back={`#/estudio/${id}`} title={study.name}>
-        <span className="vt" style={{ fontSize: 22, color: 'var(--glow)' }}>
-          {pos + 1}/{queue.length}
-        </span>
-      </Header>
-      <Progress value={(100 * pos) / queue.length} color="var(--blue-hi)" track="var(--lcd-hi)" height={8} />
-
-      <article className="px" style={{ flex: 1, minHeight: 320, padding: '26px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: 28, lineHeight: 1.15 }}>{card.front}</div>
-        {shown ? (
+    <div className="app">
+      <TopBar title="Repasar" />
+      <main className="page">
+        {session ? (
           <>
-            <div style={{ height: 4, background: 'repeating-linear-gradient(90deg, var(--paper-sh) 0 8px, transparent 8px 12px)' }} />
-            <p style={{ margin: 0, fontSize: 17, lineHeight: 1.55 }}>{card.back}</p>
-            <a href={`#/estudio/${id}/chat?q=${encodeURIComponent(`Explícame mejor «${card.front}»: ${card.back}`)}`} style={{ marginTop: 'auto', fontSize: 14, fontWeight: 600, color: 'var(--blue-sh)' }}>
-              Explícamelo mejor
-            </a>
+            <FlashSession
+              key={session.map((c) => c.id).join()}
+              cards={session}
+              onDone={(r) => {
+                setSession(null);
+                setResult(r);
+              }}
+            />
+            <button className="btn ghost sm" style={{ alignSelf: 'center' }} onClick={() => setSession(null)}>
+              Terminar
+            </button>
           </>
         ) : (
-          <button className="btn" style={{ marginTop: 'auto' }} onClick={() => setShown(true)}>
-            Mostrar respuesta
-          </button>
-        )}
-      </article>
+          <>
+            {result && (
+              <div className="card pad col pop" style={{ alignItems: 'center', textAlign: 'center', gap: 4 }}>
+                <div style={{ fontSize: 40 }}>{result.known === result.total ? '🎉' : '💪'}</div>
+                <h2>
+                  Sabías {result.known} de {result.total}
+                </h2>
+              </div>
+            )}
+            <section className="hero col" style={{ gap: 12 }}>
+              <div style={{ fontSize: 36 }}>{due.length ? '🔁' : '✅'}</div>
+              <h1>{due.length ? `${due.length} tarjeta${due.length === 1 ? '' : 's'} para hoy` : '¡Todo al día!'}</h1>
+              <p className="muted">
+                {due.length ? 'Repasar justo cuando estás a punto de olvidar es lo que más rinde.' : fresh.length ? 'Puedes adelantar con tarjetas nuevas.' : 'Crea notas para tener tarjetas que repasar.'}
+              </p>
+              {due.length > 0 && (
+                <button className="btn" onClick={() => (setResult(null), setSession(due.slice(0, 30)))}>
+                  Empezar repaso
+                </button>
+              )}
+              {!due.length && fresh.length > 0 && (
+                <button className="btn" onClick={() => (setResult(null), setSession(fresh))}>
+                  Aprender {fresh.length} nuevas
+                </button>
+              )}
+            </section>
 
-      {shown && (
-        <div className="grid3" style={{ gap: 16 }}>
-          {GRADES.map((x) => (
-            <button key={x.g} className="btn" onClick={() => grade(x.g)} style={{ background: x.bg, color: 'var(--outline)', boxShadow: 'inset 3px 3px 0 rgba(255,255,255,.4), inset -3px -3px 0 rgba(15,24,35,.25), 0 -4px 0 var(--outline), 0 4px 0 var(--outline), -4px 0 0 var(--outline), 4px 0 0 var(--outline), 0 8px 0 rgba(5,10,18,.45)', padding: '14px 4px', fontSize: 15 }}>
-              {x.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </main>
+            {state.cards.length > 0 && (
+              <section className="card pad col" style={{ gap: 10 }}>
+                <div className="row">
+                  <h3 className="grow">Tu memoria</h3>
+                  <b>{memoryOf(state.cards)}%</b>
+                </div>
+                <Bar parts={[{ value: counts.mastered, color: 'var(--good)' }, { value: counts.learning, color: 'var(--warn)' }, { value: counts.new, color: 'var(--surface-3)' }]} />
+                <div className="row small muted wrap" style={{ gap: 14 }}>
+                  <span>🟢 {counts.mastered} dominadas</span>
+                  <span>🟡 {counts.learning} aprendiendo</span>
+                  <span>⚪ {counts.new} nuevas</span>
+                </div>
+              </section>
+            )}
+
+            {perNote.length > 0 && (
+              <section className="col" style={{ gap: 10 }}>
+                <h2>Por nota</h2>
+                {perNote.map(({ note, cards, due: d, mem }) => (
+                  <a key={note.id} href={`#/nota/${note.id}?tab=tarjetas`} className="card click pad row">
+                    <span className="note-emoji" style={{ width: 40, height: 40, fontSize: 22 }}>{note.emoji}</span>
+                    <span className="grow" style={{ minWidth: 0 }}>
+                      <span className="ellipsis" style={{ display: 'block', fontWeight: 600 }}>{note.title}</span>
+                      <span className="muted small">
+                        {cards.length} tarjetas · {mem}% dominado
+                      </span>
+                    </span>
+                    {d > 0 && <span className="badge">{d}</span>}
+                  </a>
+                ))}
+              </section>
+            )}
+          </>
+        )}
+      </main>
+      <BottomNav active="repasar" due={due.length} />
+    </div>
   );
 }

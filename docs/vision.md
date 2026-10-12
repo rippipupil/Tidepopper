@@ -1,36 +1,24 @@
 # Visión y decisiones
 
 ## Idea central
-App de estudio personal (web y móvil) con dos formas de estudiar:
-
-1. **Desde mis documentos**: PDFs, fotos, textos o información pegada.
-2. **Con el asistente IA**: le pides un tema (p. ej. "código morse") y te prepara un curso a medida, por niveles.
-
-A partir de ese material, la app crea flashcards, resúmenes, tests y **minijuegos con niveles**.
+App de estudio personal (web y móvil) inspirada en Turbo AI, pero más simple y **gratis**: subes tu material (o grabas la clase) y la IA te hace apuntes, tarjetas, quiz, chat y pódcast.
 
 ## Decidido
-- **Plataformas:** web y móvil.
-- **Usuario:** una sola cuenta, solo para mí, donde se guardan mis proyectos de estudio.
-- **Estética:** pixel art 3D (relieve con luz arriba a la izquierda y sombra abajo a la derecha), en la línea de FreedomClient y Meteor Shower.
-- **Paleta:** azul claro, celeste y blanco, en tonos suaves y algo oscuros, nada chillones.
-- **Icono:** un documento en pixel art.
+- **Plataformas:** web (GitHub Pages) y Android (APK con Capacitor).
+- **Usuario:** una sola persona. Todo se guarda en el dispositivo, sin cuentas ni servidor.
+- **Estética:** moderna y limpia, al estilo Turbo. Oscuro por defecto con acento azul celeste y toques violeta, modo claro, letra Lexend, botones redondeados con un pequeño «labio» debajo.
+- **Sin juegos:** la versión 1 tenía aldea, ataques, misiones y minijuegos; en la 2 se quitaron para centrarse en estudiar.
+- **IA gratis:** Gemini (gratis) → Groq (gratis) → copiar y pegar en la app de Claude. Claude de pago es opcional.
 
-## Estructura de la app
-- **Inicio:** continuar donde lo dejaste, los dos modos (documentos y asistente IA) y tus estudios.
-- **Mis estudios:** carpetas de colores, una por estudio, que llevan a ese estudio.
-- **Un estudio:** "hoy toca", formas de estudiar (flashcards, resumen, contrarreloj, explícalo tú) y sus fuentes.
-- **Barra inferior:** Inicio · Estudios · Añadir · Perfil.
+## Estructura
+- **Inicio:** crear nota (grabar clase, subir archivo, YouTube, pegar texto, aprender un tema), carpetas, buscador y notas con su progreso.
+- **Nota:** pestañas Apuntes · Tarjetas · Quiz · Chat · Pódcast · Fuente (y Lecciones si es un curso).
+- **Repasar:** las tarjetas vencidas de todas las notas (repetición espaciada).
+- **Ajustes:** tema, claves de la IA y copia de seguridad.
 
-## Minijuegos (primeras ideas)
-- **Contrarreloj:** aparece un término y eliges el concepto correcto antes de que se acabe el tiempo.
-- **Explícalo tú:** escribes sobre un concepto y la IA te corrige: qué está bien, qué falta y qué es un error.
-- **Parejas:** une cada término con su definición.
-- **Jefe final:** examen que mezcla todo el tema y se desbloquea al llegar a cierto dominio.
-
-## Diseños
-**Elegida: A · Consola LCD** (oscura, paneles pixel en relieve y pantallas LCD), con pantallas simplificadas: botones grandes con icono y una sola acción principal por pantalla.
-Están en el lienzo de Claude Design (enlace privado).
-
-## Pendiente
-- Más brainstorming de minijuegos y del flujo del asistente IA.
-- Tecnología: PWA, app nativa o ambas; dónde se guardan los datos; inicio de sesión.
+## Qué mejora respecto a Turbo
+- Gratis, sin límites de la app ni suscripción.
+- La grabación se guarda cada 10 s: si la app se cierra, se recupera.
+- Las preguntas tienen señuelos que se parecen a la respuesta (no se aciertan por descarte).
+- Cursos por niveles con lecciones interactivas al estilo Duolingo.
+- El pódcast usa la voz del dispositivo: sin límite y sin internet una vez creado el guion.

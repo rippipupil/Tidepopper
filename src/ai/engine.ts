@@ -20,7 +20,9 @@ export interface AiKeys {
 export type AiPart =
   | { kind: 'text'; name: string; text: string }
   | { kind: 'pdf'; name: string; base64: string }
-  | { kind: 'image'; name: string; base64: string; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' };
+  | { kind: 'image'; name: string; base64: string; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' }
+  /** Audio o vídeo (solo lo entiende Gemini): en línea, subido a Gemini (uri) o un enlace de YouTube. */
+  | { kind: 'media'; name: string; mediaType: string; base64?: string; uri?: string };
 
 export class AiRefusal extends Error {}
 /** Error ya explicado para el alumno. */
@@ -52,10 +54,10 @@ function claude(apiKey: string): Anthropic {
 }
 
 function toBlocks(parts: AiPart[]): Anthropic.Beta.BetaContentBlockParam[] {
-  return parts.map((p): Anthropic.Beta.BetaContentBlockParam => {
+  return parts.filter((p) => p.kind !== 'media').map((p): Anthropic.Beta.BetaContentBlockParam => {
     if (p.kind === 'pdf') return { type: 'document', title: p.name, source: { type: 'base64', media_type: 'application/pdf', data: p.base64 } };
     if (p.kind === 'image') return { type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.base64 } };
-    return { type: 'text', text: `Fuente «${p.name}»:\n\n${p.text}` };
+    return { type: 'text', text: `Fuente «${p.name}»:\n\n${(p as { text: string }).text}` };
   });
 }
 
@@ -221,11 +223,42 @@ async function gemini(key: string, system: string, contents: unknown[], json: bo
 
 function geminiParts(parts: AiPart[], user: string): unknown[] {
   return [
-    ...parts.map((p) =>
-      p.kind === 'text' ? { text: `Fuente «${p.name}»:\n\n${p.text}` } : { inlineData: { mimeType: p.kind === 'pdf' ? 'application/pdf' : p.mediaType, data: p.base64 } },
-    ),
+    ...parts.map((p) => {
+      if (p.kind === 'text') return { text: `Fuente «${p.name}»:\n\n${p.text}` };
+      if (p.kind === 'media') return p.uri ? { fileData: { fileUri: p.uri, ...(p.mediaType ? { mimeType: p.mediaType } : {}) } } : { inlineData: { mimeType: p.mediaType, data: p.base64 } };
+      return { inlineData: { mimeType: p.kind === 'pdf' ? 'application/pdf' : p.mediaType, data: p.base64 } };
+    }),
     { text: user },
   ];
+}
+
+/**
+ * Sube un archivo grande (audio, vídeo) a Gemini y espera a que esté listo.
+ * Devuelve su uri para usarlo en las peticiones. Los archivos se borran solos a las 48 h.
+ */
+export async function geminiUpload(key: string, blob: Blob, name: string, mediaType: string): Promise<string> {
+  const boundary = `tidepopper${Math.random().toString(36).slice(2)}`;
+  const meta = JSON.stringify({ file: { display_name: name.slice(0, 120) } });
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mediaType}\r\n\r\n`,
+    blob,
+    `\r\n--${boundary}--\r\n`,
+  ]);
+  const res = await call(`https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=multipart`, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': key, 'content-type': `multipart/related; boundary=${boundary}` },
+    body,
+  }, 600);
+  if (!res.ok) throw await httpError(res);
+  let file = (await res.json())?.file;
+  for (let k = 0; file && file.state === 'PROCESSING' && k < 120; k++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const st = await call(`${GEMINI}/${file.name}`, { headers: { 'x-goog-api-key': key } }, 30);
+    if (!st.ok) throw await httpError(st);
+    file = await st.json();
+  }
+  if (!file?.uri || file.state === 'FAILED') throw new AiError('Gemini no ha podido procesar el archivo');
+  return file.uri as string;
 }
 
 // ---------- Groq (gratis, muchos usos al día, solo texto) ----------
@@ -313,6 +346,10 @@ function hasFiles(parts?: AiPart[]): boolean {
   return (parts ?? []).some((p) => p.kind !== 'text');
 }
 
+function hasMedia(parts?: AiPart[]): boolean {
+  return (parts ?? []).some((p) => p.kind === 'media');
+}
+
 async function structuredWith<T>(id: ProviderId, keys: AiKeys, r: StructuredReq<T>): Promise<T> {
   if (id === 'claude') return claudeStructured(keys.apiKey.trim(), r);
   const sys = r.system + jsonInstructions(r.schema);
@@ -343,6 +380,7 @@ export async function structured<T>(keys: AiKeys, r: StructuredReq<T>): Promise<
   const errs: string[] = [];
   for (const id of providers(keys)) {
     if (id === 'groq' && hasFiles(r.parts)) continue; // Groq no lee PDF ni fotos.
+    if (id === 'claude' && hasMedia(r.parts)) continue; // Claude no escucha audio ni ve vídeos.
     try {
       return await structuredWith(id, keys, r);
     } catch (e) {
@@ -350,6 +388,7 @@ export async function structured<T>(keys: AiKeys, r: StructuredReq<T>): Promise<
       errs.push(`${PROVIDER_NAME[id]}: ${e instanceof Error ? e.message : 'error'}`);
     }
   }
+  if (hasMedia(r.parts)) throw new AiError(`Para audio, vídeo o YouTube hace falta una clave gratis de Gemini (Ajustes)${failures(errs)}`);
   const files = (r.parts ?? []).filter((p) => p.kind !== 'text').map((p) => p.name);
   const sources = (r.parts ?? []).map((p) => (p.kind === 'text' ? `Fuente «${p.name}»:\n\n${p.text}\n\n` : '')).join('');
   try {
@@ -391,5 +430,70 @@ export async function testProvider(id: ProviderId, keys: AiKeys): Promise<string
 
 export function describeAiError(e: unknown): string {
   if (e instanceof AiRefusal || e instanceof AiError) return e.message.charAt(0).toUpperCase() + e.message.slice(1);
+  if (e instanceof Error && e.message) return `Algo ha fallado: ${e.message}`;
   return 'Algo ha fallado al hablar con la IA.';
+}
+
+// ---------- Transcribir audio y vídeo ----------
+
+const INLINE_MAX = 14 * 1024 * 1024; // Gemini acepta ~20 MB por petición (el base64 ocupa un tercio más)
+
+async function blobBase64(blob: Blob): Promise<string> {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+const TRANSCRIBE =
+  'Transcribe el audio completo, palabra por palabra, en su idioma original. Separa en párrafos cuando cambie la idea. ' +
+  'Si hay varias personas, empieza cada intervención con «— ». No resumas ni comentes nada: devuelve solo la transcripción.';
+
+/** Pasa a texto una grabación o un archivo de audio/vídeo. Gemini (gratis) primero; si no, Whisper de Groq (gratis, ≤ 25 MB). */
+export async function transcribe(keys: AiKeys, blob: Blob, name: string, onStatus?: (s: string) => void): Promise<string> {
+  const errs: string[] = [];
+  const mediaType = (blob.type || 'audio/webm').split(';')[0];
+  const gKey = keys.geminiKey?.trim();
+  if (gKey) {
+    try {
+      let part: AiPart;
+      if (blob.size <= INLINE_MAX) part = { kind: 'media', name, mediaType, base64: await blobBase64(blob) };
+      else {
+        onStatus?.('Subiendo el archivo…');
+        part = { kind: 'media', name, mediaType, uri: await geminiUpload(gKey, blob, name, mediaType) };
+      }
+      onStatus?.('Transcribiendo…');
+      return (await gemini(gKey, TRANSCRIBE, [{ role: 'user', parts: geminiParts([part], 'Transcribe este audio.') }], false, 600)).trim();
+    } catch (e) {
+      errs.push(`Gemini: ${e instanceof Error ? e.message : 'error'}`);
+    }
+  }
+  const qKey = keys.groqKey?.trim();
+  if (qKey && blob.size <= 25 * 1024 * 1024) {
+    try {
+      onStatus?.('Transcribiendo…');
+      const form = new FormData();
+      form.append('file', blob, name.includes('.') ? name : `${name}.webm`);
+      form.append('model', 'whisper-large-v3-turbo');
+      form.append('response_format', 'text');
+      const res = await call('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { authorization: `Bearer ${qKey}` }, body: form }, 600);
+      if (!res.ok) throw await httpError(res);
+      return (await res.text()).trim();
+    } catch (e) {
+      errs.push(`Groq: ${e instanceof Error ? e.message : 'error'}`);
+    }
+  }
+  if (!gKey && !qKey) throw new AiError('Para pasar audio a texto hace falta una clave gratis de Gemini o Groq (en Ajustes)');
+  throw new AiError(`No se ha podido transcribir${failures(errs)}`);
+}
+
+/** Saca el contenido de un vídeo de YouTube (solo Gemini sabe verlos). */
+export async function youtubeText(keys: AiKeys, url: string): Promise<string> {
+  const gKey = keys.geminiKey?.trim();
+  if (!gKey) throw new AiError('Para usar vídeos de YouTube hace falta una clave gratis de Gemini (en Ajustes)');
+  const part: AiPart = { kind: 'media', name: 'YouTube', mediaType: '', uri: url };
+  const prompt =
+    'Escribe una transcripción lo más completa posible de este vídeo, en su idioma original. Si no puedes transcribir literalmente, ' +
+    'reproduce con mucho detalle todo lo que se explica, en orden, con los ejemplos, datos y fórmulas que aparezcan. Solo el contenido, sin comentarios.';
+  return (await gemini(gKey, prompt, [{ role: 'user', parts: geminiParts([part], 'Este es el vídeo.') }], false, 600)).trim();
 }

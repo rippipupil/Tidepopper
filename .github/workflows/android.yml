@@ -40,7 +40,7 @@ jobs:
       - name: Crear proyecto Android
         run: npx cap add android
 
-      - name: Permiso de cámara y número de versión
+      - name: Permisos (cámara y micrófono), voz y número de versión
         env:
           VERSION_CODE: ${{ github.run_number }}
         run: python3 android-src/install.py android

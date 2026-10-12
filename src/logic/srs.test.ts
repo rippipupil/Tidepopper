@@ -4,7 +4,7 @@ import type { Card } from '../data/types';
 
 const DAY = 86_400_000;
 const now = Date.UTC(2026, 9, 8);
-const card = (id: string, sched = newSchedule(now), createdAt = now): Card => ({ id, studyId: 's', front: id, back: id, createdAt, sched });
+const card = (id: string, sched = newSchedule(now), createdAt = now): Card => ({ id, noteId: 's', front: id, back: id, createdAt, sched });
 
 describe('review', () => {
   it('una tarjeta nueva acertada vuelve en 1 día, luego en 3', () => {

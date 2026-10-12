@@ -1,6 +1,6 @@
 // Señuelos que se parecen a la respuesta correcta: mismo tipo, formato y tema,
 // para que las preguntas hagan pensar y no se acierten por descarte.
-import { normalize } from './games';
+import { normalize } from './text';
 
 const STOP = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'y', 'o', 'a', 'en', 'que', 'es', 'se', 'por', 'con', 'para', 'al', 'su', 'lo']);
 const ARTICLES = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas']);

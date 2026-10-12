@@ -1,86 +1,55 @@
-# Tidepopper 📚
+# Tidepopper 🌊
 
-App de estudio personal (web y móvil) en pixel art 3D. Estudias con tus propios apuntes o con un asistente IA, y cada sesión bien hecha te da monedas y experiencia para construir y defender tu aldea.
+App de estudio personal (web y móvil), inspirada en Turbo AI pero más simple y **gratis**. Sube tu material o graba la clase, y la IA te prepara apuntes, tarjetas, quiz, chat y un pódcast.
 
-## Qué hace ya
+## Qué hace
 
-- **Asistente IA con cursos por niveles:**
-  - Le dices un tema (por ejemplo, código morse), tu nivel y para qué lo quieres, y la IA diseña un curso de 4 a 12 niveles.
-  - Cada nivel es una **lección interactiva** al estilo Duolingo: ideas cortas con ejemplos que se alternan con ejercicios (elegir, verdadero o falso, completar la frase, ordenar, unir parejas y escribir).
-  - Respuesta al momento, racha de aciertos 🔥, y los ejercicios fallados se repiten al final.
-  - Con un 60 % pasas, con estrellas según la nota, y se abre el siguiente nivel.
-  - Las tarjetas de cada nivel aprobado pasan a tu repaso.
-- **Chat con el asistente:** en cualquier estudio o curso, pregúntale lo que quieras. Responde con tu material delante. «Explícamelo mejor» en las flashcards también abre el chat.
-- **Mis estudios:** carpetas de colores, una por tema.
-- **Añadir apuntes:** PDF, fotos (de la cámara o la galería), texto pegado o tarjetas a mano. La IA lee los PDF y las fotos directamente y crea un **resumen** y **tarjetas de repaso**.
-- **Flashcards con repetición espaciada:** cada tarjeta vuelve justo antes de que la olvides (*No la sabía · Dudé · La sabía*).
-- **Preguntas que hacen pensar:** las opciones incorrectas se parecen a la buena (mismo tipo, formato y tema). La IA escribe para cada tarjeta errores típicos que se confunden con la respuesta.
-- **Minijuegos** (con las tarjetas de cada estudio):
-  - **Contrarreloj:** elige la definición en 10 s.
-  - **Parejas:** une cada término con su definición.
-  - **Escribe:** lee la definición y escribe el término. Perdona tildes y una errata.
-  - **Verdadero o falso:** 30 segundos, todas las que puedas.
-  - **Ordena las letras:** forma el término con sus letras.
-  - **Explícalo tú:** la IA corrige tu explicación.
-- **Modo mixto:** 10 rondas al azar de tipo test, verdadero o falso, escribir y ordenar, sin repetir tipo seguido.
-- **Dibujar letras:** si estudias un idioma con otro alfabeto (hiragana, katakana, cirílico, griego o hangul), dibujas cada letra con el dedo y la app compara tu trazo con la letra real. Se puede activar una guía.
-- **Misiones diarias:** 3 cada día (repasar, jugar, dibujar, hacer un examen…), con monedas y un cristal si haces las tres.
-- **Logros:** 12 logros con cristales; algunos desbloquean decoraciones para la aldea.
-- **Exámenes:**
-  - *Rápido:* sale de tus tarjetas, sin IA.
-  - *Completo con IA:* preguntas tipo test y de desarrollo; la IA corrige y explica.
-  - En los dos: nota sobre 10, corrección pregunta a pregunta, historial de notas y fecha del examen con cuenta atrás.
-- **Explícalo tú:** escribes un concepto con tus palabras y la IA te dice qué está bien, qué falta y qué es un error.
-- **Recompensas:** monedas por acierto (la racha las multiplica), XP y niveles, y cristales por sesiones perfectas. Cada 10 aciertos entrenan una tropa.
-- **La aldea:**
-  - Mapa isométrico de 16×16 casillas.
-  - Construyes cañones, torres de arqueras, catapultas, ballestas, muros, minas… y los colocas o mueves donde quieras.
-  - Cada defensa se alimenta de un estudio, y su fuerza es lo que recuerdas de él.
-  - Las tarjetas sin repasar son **grietas** por donde entra la Niebla del Olvido.
-- **Obras y mejoras:**
-  - Cada edificio sube de nivel con monedas y tiempo de obra, como mucho un nivel por encima del ayuntamiento.
-  - Cada cabaña es un constructor.
-  - **Cada sesión de estudio acelera las obras 30 min.**
-- **Aldea con más vida:**
-  - Torre mágica (necesita el ayuntamiento a nivel 2).
-  - Decoraciones: flores, farol, bandera, estatua y fuente.
-  - Los edificios cambian de aspecto al subir de nivel: base dorada en el nivel 3 y cristal en el nivel 5.
-  - Las tropas se ven junto al cuartel.
-  - Se pueden quitar rocas y árboles, que a veces esconden un cristal.
-- **Mina:** produce monedas cada hora, pero solo se puede vaciar los días que estudias.
-- **Laboratorio:** con cristales, tus tropas destruyen más en los ataques.
-- **La Niebla del Olvido:** cada día nuevo, si tienes tarjetas sin repasar, ataca. Roba más cuanto más débiles sean tus defensas, y los muros ayudan. Te deja un informe.
-- **Ataques:** máximo **2 al día**. Cada pregunta de repaso acertada lanza una arquera, y el botín depende de lo que destruyas.
-- **Perfil:** claves de la IA (gratis o de pago) y copia de seguridad (descargar y restaurar).
+- **Crear notas desde:**
+  - 🎙️ **Grabar clase:** graba la clase y la IA la pasa a texto. La grabación se guarda cada 10 s, así que si la app se cierra se puede recuperar.
+  - 📄 **Archivos:** PDF, fotos (cámara o galería), Word (.docx), PowerPoint (.pptx), audio, vídeo y texto.
+  - ▶️ **YouTube:** pegas el enlace y la IA ve el vídeo.
+  - ✍️ **Texto pegado.**
+  - 🧭 **Aprender un tema:** la IA diseña un curso por niveles con lecciones interactivas al estilo Duolingo.
+- **Cada nota tiene pestañas:**
+  - **Apuntes:** resumen, ideas clave e índice. Los apuntes tienen secciones con emojis, tablas, avisos de colores, fórmulas (KaTeX) y diagramas (Mermaid). Se pueden editar, y con *Mejorar con IA* se hacen más fáciles, más detallados o con ejemplos, o se traducen.
+  - **Tarjetas:** modo aprender con tarjetas *nuevas*, *aprendiendo* y *dominadas* (repetición espaciada). Se giran al tocarlas, se pueden mezclar o poner al revés, marcar como favoritas y editar, y la IA puede crear más.
+  - **Quiz:** tres dificultades (básico, medio, examen). Mezcla tipo test, verdadero o falso, completar la frase, escribir, ordenar y unir parejas. Cada pregunta trae pista y explicación, y al final repasas tus fallos. También hay un quiz rápido sin IA hecho con tus tarjetas.
+  - **Chat:** preguntas lo que quieras sobre la nota. Las respuestas citan la sección de los apuntes de la que salen, y al tocar la cita vas a ella.
+  - **Pódcast:** Alex y Sara explican la nota conversando, en tres duraciones. Se oye con la voz del propio dispositivo (gratis y sin límite), con velocidad ajustable y el texto siguiendo la lectura.
+  - **Fuente:** el archivo original, la grabación, la transcripción, y la opción de rehacer los apuntes.
+- **Carpetas, buscador, compartir, descargar en Markdown e imprimir o guardar en PDF.**
+- **Repasar:** las tarjetas que tocan hoy de todas tus notas, y tu memoria por nota.
+- **Tema oscuro y claro.**
+- **Preguntas que hacen pensar:** las opciones incorrectas se parecen a la buena (mismo tipo, formato y tema).
 
-El diseño y las mecánicas están en [`docs/vision.md`](docs/vision.md) y [`docs/aldea.md`](docs/aldea.md).
+El diseño y las decisiones están en [`docs/vision.md`](docs/vision.md).
 
 ## Tus datos
 
-Todo se guarda **solo en tu dispositivo** (IndexedDB): estudios, tarjetas, aldea y la clave de la API. No hay servidor ni cuenta. Usa *Perfil → Descargar copia* para no perder nada o para pasar tus datos a otro dispositivo.
+Todo se guarda **solo en tu dispositivo** (IndexedDB): notas, tarjetas, archivos y claves. No hay servidor ni cuenta. Usa *Ajustes → Descargar copia* para no perder nada o para pasar tus datos a otro dispositivo. Los datos de la versión 1 (estudios, cursos, tarjetas y chats) se pasan solos a notas al actualizar.
 
 ## La IA
 
 La IA funciona **gratis**. Se elige sola, en este orden, y si una falla (sin cuota, sin red…) pasa a la siguiente:
 
 1. **Claude** (opcional, de pago): la mejor calidad. Solo si pones tu clave de console.anthropic.com.
-2. **Gemini** (gratis, recomendada): clave gratis sin tarjeta en [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Lee también PDF y fotos. Usa primero Flash-Lite (más rápido y con más usos gratis al día) y, si se queda sin cuota, Flash. En el plan gratis Google puede usar lo que envíes para mejorar sus modelos.
-3. **Groq** (gratis, de reserva): clave gratis en [console.groq.com/keys](https://console.groq.com/keys). Muchos usos al día, solo texto.
+2. **Gemini** (gratis, recomendada): clave gratis sin tarjeta en [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Lee PDF, fotos, audio, vídeo y YouTube (grabar clases y YouTube la necesitan). Usa primero Flash-Lite (más rápido y con más usos gratis al día) y, si se queda sin cuota, Flash. En el plan gratis Google puede usar lo que envíes para mejorar sus modelos.
+3. **Groq** (gratis, de reserva): clave gratis en [console.groq.com/keys](https://console.groq.com/keys). Muchos usos al día. Solo texto, y transcribe audio con Whisper.
 4. **Copiar y pegar**: sin ninguna clave, la app prepara la petición, la pegas en tu app de Claude y pegas la respuesta de vuelta.
 
-Las claves se ponen en *Perfil* y se guardan solo en el dispositivo. La app es personal y llama a la IA directamente desde él, así que no compartas una copia de la app con tus claves puestas.
+Las claves se ponen en *Ajustes* y se guardan solo en el dispositivo. La app es personal y llama a la IA directamente desde él, así que no compartas una copia de la app con tus claves puestas.
 
 ## Desarrollo
 
 ```bash
 npm install
 npm run dev        # servidor local
-npm test           # tests de la lógica (repaso, recompensas, aldea…)
+npm test           # tests de la lógica (repaso, Markdown, quiz, importar archivos…)
 npm run typecheck
 npm run build
 ```
 
-Hecho con React + TypeScript + Vite. Los sprites isométricos se generan con `tools/voxel.py` y los iconos con `tools/mkicons.py`.
+Hecho con React + TypeScript + Vite, con marked + DOMPurify + KaTeX + Mermaid para los apuntes, lucide para los iconos y Capacitor para Android.
 
 ## Publicación
 

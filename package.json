@@ -12,7 +12,15 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",
+    "@capacitor-community/text-to-speech": "^6.1.0",
+    "@fontsource-variable/lexend": "^5.3.0",
+    "dompurify": "^3.4.17",
+    "fflate": "^0.8.3",
     "idb-keyval": "^6.3.0",
+    "katex": "^0.19.0",
+    "lucide-react": "^1.55.0",
+    "marked": "^18.1.1",
+    "mermaid": "^12.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zod": "^4.6.5"

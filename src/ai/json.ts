@@ -1,11 +1,23 @@
 /** Saca el objeto JSON de una respuesta que puede venir con texto o ```json alrededor. */
 export function extractJson(text: string): unknown {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const body = fenced ? fenced[1] : text;
-  const start = body.indexOf('{');
-  const end = body.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new SyntaxError('No hay ningún objeto JSON en la respuesta.');
-  return JSON.parse(body.slice(start, end + 1));
+  const t = text.trim();
+  const tries: string[] = [t];
+  // Toda la respuesta dentro de un bloque ``` (el contenido puede tener otros ``` dentro, p. ej. diagramas).
+  if (t.startsWith('```')) tries.push(t.replace(/^```[a-zA-Z]*\s*/, '').replace(/```\s*$/, ''));
+  const start = t.indexOf('{');
+  const end = t.lastIndexOf('}');
+  if (start >= 0 && end > start) tries.push(t.slice(start, end + 1));
+  const fenced = t.match(/```json\s*([\s\S]*?)```/i);
+  if (fenced) tries.push(fenced[1]);
+  for (const c of tries) {
+    try {
+      const v = JSON.parse(c);
+      if (v && typeof v === 'object') return v;
+    } catch {
+      // probamos la siguiente forma
+    }
+  }
+  throw new SyntaxError('No hay ningún objeto JSON en la respuesta.');
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

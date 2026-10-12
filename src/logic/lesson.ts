@@ -1,6 +1,6 @@
 // Lecciones interactivas: pasos cortos que alternan una idea y un ejercicio.
 import type { LessonStep, LevelContent, LevelQuestion } from '../data/types';
-import { checkWritten } from './games';
+import { checkWritten } from './text';
 
 export const EXERCISES = ['elige', 'vf', 'hueco', 'ordena', 'parejas', 'escribe'] as const;
 

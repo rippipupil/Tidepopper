@@ -1,16 +1,25 @@
 // Modelo de datos de Tidepopper. Todo se guarda en el dispositivo (IndexedDB).
+// Una «nota» es la unidad de estudio: apuntes generados, tarjetas, quiz, chat y pódcast.
 
-export type FolderColor = 'blue' | 'mint' | 'gold' | 'coral';
+export type FolderColor = 'sky' | 'violet' | 'mint' | 'amber' | 'rose' | 'slate';
 
-export interface Study {
+export interface Folder {
   id: string;
   name: string;
   color: FolderColor;
   createdAt: number;
-  examDate?: string; // AAAA-MM-DD
-  summary?: string;
-  course?: Course; // solo en los estudios creados por el asistente IA
-  alphabet?: string; // id de alfabeto para el juego de dibujar letras
+}
+
+/** De dónde sale una nota. Los archivos van aparte en IndexedDB (clave file:<id>). */
+export type SourceKind = 'pdf' | 'image' | 'text' | 'audio' | 'video' | 'youtube' | 'doc' | 'topic';
+
+export interface NoteSource {
+  id: string;
+  kind: SourceKind;
+  name: string;
+  addedAt: number;
+  mediaType?: string;
+  url?: string;
 }
 
 export interface LevelQuestion {
@@ -20,7 +29,7 @@ export interface LevelQuestion {
   explanation: string;
 }
 
-/** Tipos de paso de una lección interactiva: explicaciones cortas y ejercicios. */
+/** Tipos de paso de una lección o un quiz: explicaciones cortas y ejercicios. */
 export type StepType = 'explica' | 'elige' | 'vf' | 'hueco' | 'ordena' | 'parejas' | 'escribe';
 
 export interface LessonStep {
@@ -28,7 +37,7 @@ export interface LessonStep {
   emoji: string;
   /** explica: la idea; ejercicios: el enunciado (en «hueco», con ___ donde va la palabra). */
   text: string;
-  /** explica: un ejemplo o analogía. */
+  /** explica: un ejemplo o analogía; en un quiz, una pista. */
   example: string;
   /** elige y hueco: opciones; ordena: elementos en el orden correcto. */
   options: string[];
@@ -60,6 +69,7 @@ export interface CourseLevel {
   content?: LevelContent;
 }
 
+/** Curso por niveles que diseña la IA a partir de un tema. */
 export interface Course {
   topic: string;
   goal: string;
@@ -68,22 +78,46 @@ export interface Course {
   levels: CourseLevel[];
 }
 
-export interface ChatMsg {
-  role: 'user' | 'assistant';
+export interface PodcastLine {
+  host: 0 | 1;
   text: string;
-  at: number;
 }
 
-export type SourceKind = 'pdf' | 'image' | 'text';
+export type PodcastLength = 'corto' | 'medio' | 'largo';
 
-export interface Source {
+export interface Podcast {
+  length: PodcastLength;
+  title: string;
+  lines: PodcastLine[];
+  createdAt: number;
+}
+
+export type QuizLevel = 'basico' | 'medio' | 'examen';
+
+export interface QuizRecord {
+  at: number;
+  level: QuizLevel;
+  correct: number;
+  total: number;
+}
+
+export interface Note {
   id: string;
-  studyId: string;
-  kind: SourceKind;
-  name: string;
-  addedAt: number;
-  text?: string; // solo para fuentes de texto
-  mediaType?: string; // para pdf / imagen; el archivo va aparte (clave file:<id>)
+  title: string;
+  emoji: string;
+  folderId?: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Los apuntes en Markdown: títulos, tablas, emojis, fórmulas ($…$) y diagramas (```mermaid). */
+  markdown: string;
+  summary: string;
+  keyPoints: string[];
+  /** La fuente en texto: transcripción de la grabación, texto pegado o extraído. */
+  transcript?: string;
+  sources: NoteSource[];
+  podcast?: Podcast;
+  quizzes: QuizRecord[];
+  course?: Course;
 }
 
 /** Programación de repaso de una tarjeta (repetición espaciada). */
@@ -97,57 +131,25 @@ export interface Schedule {
 
 export interface Card {
   id: string;
-  studyId: string;
+  noteId: string;
   front: string;
   back: string;
   /** Respuestas incorrectas pero creíbles que escribió la IA, para los señuelos. */
   wrong?: string[];
+  favorite?: boolean;
   createdAt: number;
   sched: Schedule;
 }
 
 export type Grade = 'again' | 'hard' | 'good';
 
-export interface Wallet {
-  coins: number;
-  gems: number;
-  xp: number;
+export interface ChatMsg {
+  role: 'user' | 'assistant';
+  text: string;
+  at: number;
 }
 
-export interface Placed {
-  id: string;
-  type: string;
-  i: number;
-  j: number;
-  level: number;
-  studyId?: string; // defensas: estudio que las alimenta
-  upgradeUntil?: number; // en obras hasta (ms)
-  collectedAt?: number; // minas: última recogida (ms)
-}
-
-export interface RaidReport {
-  day: string;
-  cracks: number;
-  defense: number; // 0–100
-  stolen: number;
-  seen: boolean;
-}
-
-export interface Village {
-  buildings: Placed[];
-  attacksDay: string; // AAAA-MM-DD del último ataque contado
-  attacksUsed: number;
-  troops: number;
-  correctSinceTroop: number;
-  labLevel: number; // 1–5: fuerza de las tropas
-  lastRaidDay: string;
-  raid: RaidReport | null;
-}
-
-export interface Streak {
-  lastDay: string; // AAAA-MM-DD
-  days: number;
-}
+export type Theme = 'system' | 'dark' | 'light';
 
 export interface Settings {
   /** Clave de la API de Claude (de pago). */
@@ -156,39 +158,16 @@ export interface Settings {
   geminiKey: string;
   /** Clave gratis de Groq. */
   groqKey: string;
-}
-
-export interface ExamRecord {
-  id: string;
-  studyId: string;
-  at: number;
-  kind: 'rapido' | 'ia';
-  score: number; // nota sobre 10, con un decimal
-  correct: number;
-  total: number;
-}
-
-export type StatKey = 'reviews' | 'games' | 'mixed' | 'letters' | 'levels' | 'exams' | 'examsPassed' | 'attacks' | 'built' | 'removed';
-
-export interface Progress {
-  totals: Record<StatKey, number>;
-  day: string;
-  today: Record<StatKey, number>;
-  bestExam: number;
-  missionsClaimed: string[]; // de hoy
-  achievements: string[]; // logros ya cobrados
+  theme: Theme;
+  /** Velocidad del pódcast (1 = normal). */
+  podcastRate: number;
 }
 
 export interface AppState {
-  version: 1;
-  studies: Study[];
-  sources: Source[];
+  version: 2;
+  notes: Note[];
+  folders: Folder[];
   cards: Card[];
-  exams: ExamRecord[];
-  chats: Record<string, ChatMsg[]>; // por estudio
-  progress: Progress;
-  wallet: Wallet;
-  village: Village;
-  streak: Streak;
+  chats: Record<string, ChatMsg[]>; // por nota
   settings: Settings;
 }
