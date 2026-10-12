@@ -81,15 +81,32 @@ export interface Course {
 export interface PodcastLine {
   host: 0 | 1;
   text: string;
+  /** Si la intervención es una pregunta al oyente: opciones, la correcta y lo que explica el otro presentador. */
+  options?: string[];
+  answer?: number;
+  explanation?: string;
 }
 
 export type PodcastLength = 'corto' | 'medio' | 'largo';
+export type PodcastStyle = 'charla' | 'clase' | 'debate' | 'entrevista';
 
 export interface Podcast {
   length: PodcastLength;
+  style?: PodcastStyle;
+  /** Nombres de los dos presentadores (antes siempre Alex y Sara). */
+  hosts?: [string, string];
   title: string;
   lines: PodcastLine[];
   createdAt: number;
+}
+
+/** Voces del pódcast: las del dispositivo (gratis, sin internet) o las realistas de Gemini (gratis con clave). */
+export interface PodcastVoices {
+  engine: 'device' | 'gemini';
+  /** Índice de voz del dispositivo para cada presentador (null = automática). */
+  device: [number | null, number | null];
+  /** Voz de Gemini para cada presentador. */
+  gemini: [string, string];
 }
 
 export type QuizLevel = 'basico' | 'medio' | 'examen';
@@ -161,6 +178,9 @@ export interface Settings {
   theme: Theme;
   /** Velocidad del pódcast (1 = normal). */
   podcastRate: number;
+  podcastVoices: PodcastVoices;
+  /** Preguntas que pausan el pódcast. */
+  podcastQuestions: boolean;
 }
 
 export interface AppState {

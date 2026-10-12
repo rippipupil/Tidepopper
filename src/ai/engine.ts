@@ -159,30 +159,41 @@ export function pickGeminiModels(names: string[]): string[] {
   return [...new Set([...lite, ...flash, ...GEMINI_FALLBACK])];
 }
 
-const modelCache = new Map<string, Promise<string[]>>();
+const listCache = new Map<string, Promise<string[] | null>>();
 
-/** Pregunta a Google qué modelos puede usar esta clave (los retiran y cambian a menudo). */
-function geminiModels(key: string): Promise<string[]> {
-  let p = modelCache.get(key);
+/** Nombres de los modelos que puede usar esta clave (null si no se ha podido leer la lista). */
+function listGemini(key: string): Promise<string[] | null> {
+  let p = listCache.get(key);
   if (!p) {
     p = call(`${GEMINI}/models?pageSize=1000`, { headers: { 'x-goog-api-key': key } }, 15)
       .then(async (res) => {
         if (!res.ok) throw await httpError(res);
         const data = await res.json();
-        return pickGeminiModels(
-          (data?.models ?? [])
-            .filter((m: { supportedGenerationMethods?: string[] }) => m.supportedGenerationMethods?.includes('generateContent'))
-            .map((m: { name: string }) => m.name),
-        );
+        return (data?.models ?? [])
+          .filter((m: { supportedGenerationMethods?: string[] }) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m: { name: string }) => m.name.replace(/^models\//, '')) as string[];
       })
       .catch((e) => {
-        modelCache.delete(key);
+        listCache.delete(key);
         if (e instanceof AiError && /clave/.test(e.message)) throw e;
-        return GEMINI_FALLBACK;
+        return null;
       });
-    modelCache.set(key, p);
+    listCache.set(key, p);
   }
   return p;
+}
+
+/** Pregunta a Google qué modelos puede usar esta clave (los retiran y cambian a menudo). */
+async function geminiModels(key: string): Promise<string[]> {
+  const names = await listGemini(key);
+  return names ? pickGeminiModels(names) : GEMINI_FALLBACK;
+}
+
+/** Modelos de voz (texto a voz) de Gemini: los Flash más nuevos primero. */
+export function pickTtsModels(names: string[]): string[] {
+  const version = (n: string) => Number(/gemini-(\d+(?:\.\d+)?)/.exec(n)?.[1] ?? 0);
+  const tts = names.filter((n) => /tts/i.test(n)).sort((a, b) => Number(/pro/.test(a)) - Number(/pro/.test(b)) || version(b) - version(a));
+  return [...new Set([...tts, 'gemini-2.5-flash-preview-tts'])];
 }
 
 /** Claves cuyo Gemini no acepta el esquema JSON (se piden sin él). */
@@ -496,4 +507,47 @@ export async function youtubeText(keys: AiKeys, url: string): Promise<string> {
     'Escribe una transcripción lo más completa posible de este vídeo, en su idioma original. Si no puedes transcribir literalmente, ' +
     'reproduce con mucho detalle todo lo que se explica, en orden, con los ejemplos, datos y fórmulas que aparezcan. Solo el contenido, sin comentarios.';
   return (await gemini(gKey, prompt, [{ role: 'user', parts: geminiParts([part], 'Este es el vídeo.') }], false, 600)).trim();
+}
+
+// ---------- Voces realistas de Gemini (texto a voz) ----------
+
+/**
+ * Lee un trozo de pódcast con voces de Gemini (como mucho dos presentadores por petición).
+ * Devuelve el audio en WAV.
+ */
+export async function geminiSpeech(keys: AiKeys, lines: { speaker: string; text: string }[], voices: Record<string, string>): Promise<Blob> {
+  const key = keys.geminiKey?.trim();
+  if (!key) throw new AiError('Las voces realistas necesitan la clave gratis de Gemini (en Ajustes)');
+  const { pcmToWav } = await import('../logic/podcast');
+  const speakers = [...new Set(lines.map((l) => l.speaker))];
+  const speechConfig =
+    speakers.length >= 2
+      ? { multiSpeakerVoiceConfig: { speakerVoiceConfigs: speakers.slice(0, 2).map((sp) => ({ speaker: sp, voiceConfig: { prebuiltVoiceConfig: { voiceName: voices[sp] ?? 'Puck' } } })) } }
+      : { voiceConfig: { prebuiltVoiceConfig: { voiceName: voices[speakers[0]] ?? 'Puck' } } };
+  const text =
+    speakers.length >= 2
+      ? `Lee esta conversación de un pódcast educativo en español de España, con naturalidad, ritmo animado y cercano:\n\n${lines.map((l) => `${l.speaker}: ${l.text}`).join('\n')}`
+      : `Lee en español de España, con naturalidad y tono cercano: ${lines.map((l) => l.text).join(' ')}`;
+  let last: Error = new AiError('no hay ningún modelo de voz disponible');
+  for (const model of pickTtsModels((await listGemini(key)) ?? [])) {
+    const res = await post(`${GEMINI}/models/${model}:generateContent`, { 'x-goog-api-key': key }, {
+      contents: [{ role: 'user', parts: [{ text }] }],
+      generationConfig: { responseModalities: ['AUDIO'], speechConfig },
+    }, 180);
+    if (res.status === 404 || res.status === 429 || res.status === 503 || res.status === 400) {
+      last = await httpError(res);
+      continue;
+    }
+    if (!res.ok) throw await httpError(res);
+    const data = await res.json();
+    const part = (data?.candidates?.[0]?.content?.parts ?? []).find((p: { inlineData?: { data?: string } }) => p.inlineData?.data);
+    if (!part) throw new AiError('Gemini no ha devuelto audio');
+    const mime: string = part.inlineData.mimeType ?? '';
+    const rate = Number(/rate=(\d+)/.exec(mime)?.[1] ?? 24000);
+    const bin = atob(part.inlineData.data);
+    const pcm = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) pcm[i] = bin.charCodeAt(i);
+    return /wav|mpeg|mp3|ogg/.test(mime) ? new Blob([pcm], { type: mime }) : pcmToWav(pcm, rate);
+  }
+  throw last;
 }

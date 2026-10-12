@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { structured, text, type AiKeys, type AiPart } from './engine';
-import type { LevelContent, Note, PodcastLength, QuizLevel, LessonStep } from '../data/types';
+import type { LevelContent, Note, PodcastLength, PodcastStyle, QuizLevel, LessonStep } from '../data/types';
+import { STYLES } from '../logic/podcast';
 import { cleanSteps, isExercise, lessonText, quizOf } from '../logic/lesson';
 
 // Tareas de la IA. Cada una se resuelve con la primera IA disponible: Claude,
 // Gemini, Groq o, sin claves, copiar y pegar en la app de Claude (ver engine.ts).
-export { describeAiError, AiRefusal, testProvider, providers, PROVIDER_NAME, transcribe, youtubeText } from './engine';
+export { describeAiError, AiRefusal, testProvider, providers, PROVIDER_NAME, transcribe, youtubeText, geminiSpeech } from './engine';
 export type { AiKeys, AiPart, ProviderId } from './engine';
 
 const CardSchema = z.object({
@@ -137,26 +138,38 @@ export async function generateQuiz(keys: AiKeys, note: Note, level: QuizLevel, c
 
 const PodcastSchema = z.object({
   title: z.string().describe('Título atractivo del episodio'),
-  lines: z.array(z.object({ host: z.number().int().min(0).max(1).describe('0 = Alex, 1 = Sara'), text: z.string().describe('Lo que dice, 1-4 frases naturales') })),
+  lines: z.array(
+    z.object({
+      host: z.number().int().min(0).max(1).describe('Quién habla: 0 o 1'),
+      text: z.string().describe('Lo que dice, 1-4 frases naturales. Si es una pregunta al oyente, la pregunta dicha en voz alta'),
+      options: z.array(z.string()).describe('Solo si es una pregunta al oyente: 3 opciones cortas; si no, vacío'),
+      answer: z.number().int().describe('Solo en preguntas: índice de la opción correcta; si no, -1'),
+      explanation: z.string().describe('Solo en preguntas: lo que explica el otro presentador después, 1-2 frases; si no, vacío'),
+    }),
+  ),
 });
 
-const PODCAST_LEN: Record<PodcastLength, string> = {
-  corto: 'unas 14-18 intervenciones (unos 2-3 minutos): lo esencial',
-  medio: 'unas 28-36 intervenciones (unos 5-6 minutos)',
-  largo: 'unas 50-60 intervenciones (unos 10 minutos): a fondo, con ejemplos',
+const PODCAST_LEN: Record<PodcastLength, { text: string; questions: string }> = {
+  corto: { text: 'unas 14-18 intervenciones (unos 2-3 minutos): lo esencial', questions: '2' },
+  medio: { text: 'unas 28-36 intervenciones (unos 5-6 minutos)', questions: '3 o 4' },
+  largo: { text: 'unas 50-60 intervenciones (unos 10 minutos): a fondo, con ejemplos', questions: '5 o 6' },
 };
 
-/** Guion de un pódcast de dos presentadores que explican la nota conversando. */
-export function generatePodcast(keys: AiKeys, note: Note, length: PodcastLength) {
+/** Guion de un pódcast interactivo de dos presentadores, con preguntas que lo pausan. */
+export function generatePodcast(keys: AiKeys, note: Note, length: PodcastLength, style: PodcastStyle) {
+  const st = STYLES[style];
   return structured(keys, {
     schema: PodcastSchema,
     maxTokens: 16000,
     effort: 'medium',
     system:
-      'Escribes el guion de un pódcast educativo en español con dos presentadores: Alex (host 0), curioso, hace preguntas y pone ejemplos; ' +
-      'y Sara (host 1), experta y cercana, explica con claridad. Conversación natural y animada, con analogías y algún momento divertido, ' +
-      `fiel a los apuntes. Duración: ${PODCAST_LEN[length]}. Empiezan presentando el tema y terminan con un repaso de lo más importante. ` +
-      'Escribe para ser leído en voz alta: sin Markdown, sin emojis, sin fórmulas en LaTeX (dilas con palabras).',
+      `Escribes el guion de un pódcast educativo en español, estilo «${st.label}» (${st.text}). Presentadores: ` +
+      `${st.hosts[0]} (host 0), ${st.roles[0]}; y ${st.hosts[1]} (host 1), ${st.roles[1]}. Se llaman por su nombre de vez en cuando.\n` +
+      `- Conversación natural y animada, con analogías, algún momento divertido y reacciones («¡vaya!», «espera, espera…»), fiel a los apuntes.\n` +
+      `- Duración: ${PODCAST_LEN[length].text}. Empiezan presentando el tema y terminan con un repaso de lo más importante.\n` +
+      `- Es INTERACTIVO: ${PODCAST_LEN[length].questions} veces, repartidas a lo largo del episodio, uno de los presentadores se dirige al oyente y le hace una pregunta para comprobar si lo ha entendido (por ejemplo «Pausa: a ver, tú que nos escuchas, ¿qué crees que…?»). ` +
+      'Esa intervención lleva «options» (3 opciones, las incorrectas creíbles), «answer» y «explanation» (lo que dirá el otro presentador tras la respuesta). La conversación sigue después con naturalidad.\n' +
+      '- Escribe para ser leído en voz alta: sin Markdown, sin emojis, sin fórmulas en LaTeX (dilas con palabras).',
     user: `Apuntes «${note.title}»:\n\n${noteContext(note, 40000)}`,
   });
 }

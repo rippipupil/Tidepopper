@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickGeminiModels } from './engine';
+import { pickGeminiModels, pickTtsModels } from './engine';
 
 describe('pickGeminiModels', () => {
   it('pone primero el Flash-Lite más nuevo, luego el Flash más nuevo y al final los alias', () => {
@@ -18,5 +18,16 @@ describe('pickGeminiModels', () => {
 
   it('sin lista usa los alias', () => {
     expect(pickGeminiModels([])).toEqual(['gemini-flash-lite-latest', 'gemini-flash-latest']);
+  });
+});
+
+
+describe('pickTtsModels', () => {
+  it('elige los modelos de voz Flash más nuevos antes que los Pro', () => {
+    expect(pickTtsModels(['gemini-2.5-pro-preview-tts', 'gemini-3.1-flash-tts-preview', 'gemini-2.5-flash-preview-tts', 'gemini-3.5-flash'])).toEqual([
+      'gemini-3.1-flash-tts-preview',
+      'gemini-2.5-flash-preview-tts',
+      'gemini-2.5-pro-preview-tts',
+    ]);
   });
 });

@@ -4,7 +4,15 @@ import { migrateV1, type V1State } from './migrate';
 import { completeLevel } from '../logic/course';
 import { newSchedule, review } from '../logic/srs';
 
-export const DEFAULT_SETTINGS: Settings = { apiKey: '', geminiKey: '', groqKey: '', theme: 'system', podcastRate: 1 };
+export const DEFAULT_SETTINGS: Settings = {
+  apiKey: '',
+  geminiKey: '',
+  groqKey: '',
+  theme: 'system',
+  podcastRate: 1,
+  podcastVoices: { engine: 'device', device: [null, null], gemini: ['Puck', 'Kore'] },
+  podcastQuestions: true,
+};
 
 export function initialState(): AppState {
   return { version: 2, notes: [], folders: [], cards: [], chats: {}, settings: { ...DEFAULT_SETTINGS } };
@@ -21,7 +29,7 @@ export function hydrate(saved: unknown): AppState {
     ...v2,
     version: 2,
     notes: (v2.notes ?? []).map((n) => ({ ...n, quizzes: n.quizzes ?? [], sources: n.sources ?? [], keyPoints: n.keyPoints ?? [] })),
-    settings: { ...base.settings, ...v2.settings },
+    settings: { ...base.settings, ...v2.settings, podcastVoices: { ...base.settings.podcastVoices, ...v2.settings?.podcastVoices } },
   };
 }
 

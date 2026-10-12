@@ -15,7 +15,10 @@ App de estudio personal (web y móvil), inspirada en Turbo AI pero más simple y
   - **Tarjetas:** modo aprender con tarjetas *nuevas*, *aprendiendo* y *dominadas* (repetición espaciada). Se giran al tocarlas, se pueden mezclar o poner al revés, marcar como favoritas y editar, y la IA puede crear más.
   - **Quiz:** tres dificultades (básico, medio, examen). Mezcla tipo test, verdadero o falso, completar la frase, escribir, ordenar y unir parejas. Cada pregunta trae pista y explicación, y al final repasas tus fallos. También hay un quiz rápido sin IA hecho con tus tarjetas.
   - **Chat:** preguntas lo que quieras sobre la nota. Las respuestas citan la sección de los apuntes de la que salen, y al tocar la cita vas a ella.
-  - **Pódcast:** Alex y Sara explican la nota conversando, en tres duraciones. Se oye con la voz del propio dispositivo (gratis y sin límite), con velocidad ajustable y el texto siguiendo la lectura.
+  - **Pódcast interactivo:** dos presentadores explican la nota conversando, en 4 estilos (charla, clase, debate o entrevista) y 3 duraciones.
+    - De vez en cuando paran y te hacen una pregunta. El pódcast espera tu respuesta y el otro presentador te dice si has acertado y por qué. Al final ves cuántas acertaste.
+    - **Voces:** las del dispositivo (gratis, sin internet; eliges entre las voces en español que tenga) o **voces realistas de Gemini** (gratis con la clave, 30 voces a elegir para cada presentador). El audio realista se guarda en el dispositivo, así que la segunda vez no gasta peticiones.
+    - Velocidad ajustable y el texto sigue la lectura.
   - **Fuente:** el archivo original, la grabación, la transcripción, y la opción de rehacer los apuntes.
 - **Carpetas, buscador, compartir, descargar en Markdown e imprimir o guardar en PDF.**
 - **Repasar:** las tarjetas que tocan hoy de todas tus notas, y tu memoria por nota.
