@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LessonStep } from '../data/types';
-import { checkOrder, checkWrite, cleanSteps, lessonText, quizOf, scrambledOrder, stepsOf } from './lesson';
+import { checkOrder, checkWrite, cleanSteps, lessonText, quizOf, scrambledOrder, shuffleChoices, stepsOf } from './lesson';
 
 const step = (s: Partial<LessonStep>): LessonStep => ({ type: 'explica', emoji: '', text: '', example: '', options: [], answer: -1, pairs: [], accepted: [], explanation: '', ...s });
 
@@ -58,5 +58,33 @@ describe('comprobaciones', () => {
     const steps = [step({ text: 'Idea', example: 'Ej' }), step({ type: 'elige', text: 'P', options: ['a', 'b'], answer: 1 })];
     expect(lessonText(steps)).toBe('Idea\nEjemplo: Ej');
     expect(quizOf(steps)).toEqual([{ prompt: 'P', options: ['a', 'b'], answer: 1, explanation: '' }]);
+  });
+});
+
+describe('shuffleChoices', () => {
+  const step = (k: number, options = ['buena', 'mala 1', 'mala 2', 'mala 3']) => ({ type: 'elige' as const, emoji: '', text: `¿${k}?`, example: '', options, answer: 0, pairs: [], accepted: [], explanation: '' });
+
+  it('reparte la respuesta correcta por igual entre A, B, C y D', () => {
+    const out = shuffleChoices(Array.from({ length: 40 }, (_, k) => step(k)));
+    const count = [0, 0, 0, 0];
+    for (const s of out) {
+      expect(s.options[s.answer]).toBe('buena');
+      expect([...s.options].sort()).toEqual(['buena', 'mala 1', 'mala 2', 'mala 3']);
+      count[s.answer]++;
+    }
+    expect(count).toEqual([10, 10, 10, 10]);
+  });
+
+  it('cada bloque de 4 preguntas tiene la buena en las 4 posiciones', () => {
+    const out = shuffleChoices(Array.from({ length: 8 }, (_, k) => step(k)));
+    expect(out.slice(0, 4).map((s) => s.answer).sort()).toEqual([0, 1, 2, 3]);
+    expect(out.slice(4, 8).map((s) => s.answer).sort()).toEqual([0, 1, 2, 3]);
+  });
+
+  it('no mueve opciones que dependen de su sitio ni toca otros tipos', () => {
+    const fixed = step(1, ['X', 'Y', 'Z', 'Todas las anteriores']);
+    expect(shuffleChoices([fixed])[0]).toBe(fixed);
+    const vf = { ...step(2), type: 'vf' as const, options: [], answer: 1 };
+    expect(shuffleChoices([vf])[0]).toBe(vf);
   });
 });

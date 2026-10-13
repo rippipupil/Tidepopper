@@ -118,6 +118,32 @@ export function shuffled<T>(xs: T[], rnd: () => number = Math.random): T[] {
   return a;
 }
 
+// Opciones que dependen de su sitio («Todas las anteriores», «A y B»…): no se pueden mover.
+const POSITIONAL = /\b(anteriores|ambas|las dos|los dos|ninguna de (las|ellas)|todas (las|ellas)|opci[oó]n [a-d]\b|^[a-d] y [a-d]$)/i;
+
+/**
+ * Baraja las opciones de «elige» y «hueco» para que la correcta no caiga siempre en A o B (la IA
+ * casi siempre la pone la primera). Dentro de un mismo quiz las posiciones se reparten por igual:
+ * con 4 opciones, de cada 4 preguntas una tiene la buena en A, otra en B, otra en C y otra en D,
+ * en orden aleatorio.
+ */
+export function shuffleChoices<T extends LessonStep>(steps: T[], rnd: () => number = Math.random): T[] {
+  const bags = new Map<number, number[]>();
+  const nextPos = (n: number) => {
+    let bag = bags.get(n);
+    if (!bag?.length) bags.set(n, (bag = shuffled([...Array(n).keys()], rnd)));
+    return bag.pop()!;
+  };
+  return steps.map((s) => {
+    if ((s.type !== 'elige' && s.type !== 'hueco') || s.options.length < 2 || s.answer < 0 || s.answer >= s.options.length) return s;
+    if (s.options.some((o) => POSITIONAL.test(o.trim()))) return s;
+    const correct = s.options[s.answer];
+    const others = shuffled(s.options.filter((_, k) => k !== s.answer), rnd);
+    const pos = nextPos(s.options.length);
+    return { ...s, options: [...others.slice(0, pos), correct, ...others.slice(pos)], answer: pos };
+  });
+}
+
 /** Desordena sin dejarlo igual que el orden correcto (si se puede). */
 export function scrambledOrder(xs: string[], rnd: () => number = Math.random): string[] {
   for (let k = 0; k < 8; k++) {

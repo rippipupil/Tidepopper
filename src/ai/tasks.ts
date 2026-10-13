@@ -3,7 +3,7 @@ import { structured, text, type AiKeys, type AiPart } from './engine';
 import type { LevelContent, Note, PodcastLength, PodcastStyle, QuizLevel, LessonStep } from '../data/types';
 import { STYLES } from '../logic/podcast';
 import { applyPatch, changedHeading, editScope, looksTruncated, parseEditOutput, replaceSection, type EditScope } from '../logic/noteEdit';
-import { cleanSteps, isExercise, lessonText, quizOf } from '../logic/lesson';
+import { cleanSteps, isExercise, lessonText, quizOf, shuffleChoices } from '../logic/lesson';
 
 // Tareas de la IA. Cada una se resuelve con la primera IA disponible: Claude,
 // Gemini, Groq o, sin claves, copiar y pegar en la app de Claude (ver engine.ts).
@@ -127,12 +127,12 @@ export async function generateQuiz(keys: AiKeys, note: Note, level: QuizLevel, c
       `Pones quizzes en español para estudiar unos apuntes. Dificultad: ${LEVEL_TEXT[level]}\n` +
       `- Exactamente ${count} preguntas. Mezcla tipos: sobre todo «elige», y también «vf», «hueco», «escribe», «ordena» y «parejas».\n` +
       '- Usa el campo «example» para una PISTA que ayude sin dar la respuesta.\n' +
-      '- En «explanation», explica por qué es la correcta y por qué las otras no, en 1-2 frases.\n' +
+      '- En «explanation», explica por qué es la correcta y por qué las otras no, en 1-2 frases. Nunca te refieras a una opción por su letra o su posición («la A», «la primera»): la app las desordena.\n' +
       '- Las opciones incorrectas son del mismo tipo y formato que la correcta y se confunden con ella; nunca absurdas ni de otro tema.\n' +
       '- Pregunta solo por lo que está en los apuntes.',
     user: `Apuntes «${note.title}»:\n\n${noteContext(note)}`,
   });
-  return cleanSteps(out.questions).filter(isExercise).slice(0, count);
+  return shuffleChoices(cleanSteps(out.questions).filter(isExercise).slice(0, count));
 }
 
 const TYPE_TEXT: Record<string, string> = {
@@ -179,13 +179,13 @@ export async function generateFocusedQuiz(keys: AiKeys, note: Note, req: Focused
         : '- Busca en los apuntes la parte que corresponde a lo que pide y pregunta SOLO sobre eso, a fondo (conceptos, detalles, excepciones, casos). Si pide algo que no está en los apuntes, pregunta sobre lo más relacionado que sí esté.\n') +
       typeRule +
       '- Usa el campo «example» para una PISTA que ayude sin dar la respuesta.\n' +
-      '- En «explanation», explica por qué es la correcta y por qué las otras no, en 1-2 frases.\n' +
+      '- En «explanation», explica por qué es la correcta y por qué las otras no, en 1-2 frases. Nunca te refieras a una opción por su letra o su posición («la A», «la primera»): la app las desordena.\n' +
       '- Las opciones incorrectas son del mismo tipo y formato que la correcta y se confunden con ella; nunca absurdas.',
     user: `Apuntes «${note.title}»${only ? ' — solo el tema pedido' : ''}:\n\n${material}`,
   });
   const steps = cleanSteps(out.questions).filter(isExercise);
   const wanted = steps.filter((s) => !types.length || types.includes(s.type));
-  return (wanted.length >= Math.min(3, steps.length) ? wanted : steps).slice(0, count);
+  return shuffleChoices((wanted.length >= Math.min(3, steps.length) ? wanted : steps).slice(0, count));
 }
 
 // ---------- Pódcast ----------
@@ -222,7 +222,7 @@ export function generatePodcast(keys: AiKeys, note: Note, length: PodcastLength,
       `- Conversación natural y animada, con analogías, algún momento divertido y reacciones («¡vaya!», «espera, espera…»), fiel a los apuntes.\n` +
       `- Duración: ${PODCAST_LEN[length].text}. Empiezan presentando el tema y terminan con un repaso de lo más importante.\n` +
       `- Es INTERACTIVO: ${PODCAST_LEN[length].questions} veces, repartidas a lo largo del episodio, uno de los presentadores se dirige al oyente y le hace una pregunta para comprobar si lo ha entendido (por ejemplo «Pausa: a ver, tú que nos escuchas, ¿qué crees que…?»). ` +
-      'Esa intervención lleva «options» (3 opciones, las incorrectas creíbles), «answer» y «explanation» (lo que dirá el otro presentador tras la respuesta). La conversación sigue después con naturalidad.\n' +
+      'Esa intervención lleva «options» (3 opciones, las incorrectas creíbles), «answer» y «explanation» (lo que dirá el otro presentador tras la respuesta). Las opciones salen en pantalla y la app las desordena: no las digas con letras ni por su posición. La conversación sigue después con naturalidad.\n' +
       '- Escribe para ser leído en voz alta: sin Markdown, sin emojis, sin fórmulas en LaTeX (dilas con palabras).',
     user: `Apuntes «${note.title}»:\n\n${noteContext(note, 40000)}`,
   });
@@ -363,6 +363,6 @@ export async function generateLevelContent(
       '- Tono cercano y animado, tuteando, español sencillo. Explica solo lo de este nivel, apoyándote en los anteriores.',
     user: `Curso: ${course.topic}\nObjetivo: ${course.goal || 'aprenderlo bien'}\nEl alumno ${START_TEXT[course.start]}.\n\nTemario:\n${plan}\n\nCrea la lección del nivel ${index + 1}.`,
   });
-  const steps = cleanSteps(out.steps);
+  const steps = shuffleChoices(cleanSteps(out.steps));
   return { steps, keyPoints: out.keyPoints, cards: out.cards, lesson: lessonText(steps), quiz: quizOf(steps) };
 }

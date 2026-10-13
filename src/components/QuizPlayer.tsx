@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Lightbulb, NotebookPen, RotateCcw, Sparkles, Target } from 'lucide-react';
 import { useApp } from '../data/store';
 import { recordAttempt, reviseNote } from '../data/actions';
-import { encourage, praise } from '../logic/lesson';
+import { encourage, praise, shuffleChoices } from '../logic/lesson';
 import { splitSections } from '../logic/sections';
 import type { LessonStep, Note, SavedQuiz } from '../data/types';
 import { StepView } from './Steps';
@@ -25,7 +25,10 @@ export const answerText = (s: LessonStep) =>
 
 export default function QuizPlayer({ quiz, note, onNew }: { quiz: SavedQuiz; note?: Note; onNew?: () => void }) {
   const { state, update } = useApp();
-  const [list, setList] = useState<LessonStep[]>(quiz.steps);
+  // En cada intento las opciones se colocan de nuevo: la buena cae repartida entre A, B, C y D.
+  const [list, setList] = useState<LessonStep[]>(() => shuffleChoices(quiz.steps));
+  /** Vuelta completa (cuenta para tu nota) o solo «Repetir fallos». */
+  const [full, setFull] = useState(true);
   const [pos, setPos] = useState(0);
   const [answer, setAnswer] = useState<boolean | null>(null);
   const [hint, setHint] = useState(false);
@@ -33,8 +36,9 @@ export default function QuizPlayer({ quiz, note, onNew }: { quiz: SavedQuiz; not
   const [finished, setFinished] = useState(false);
   const [fixing, setFixing] = useState<'busy' | string | null>(null);
 
-  const begin = (steps: LessonStep[]) => {
-    setList(steps);
+  const begin = (steps: LessonStep[], whole: boolean) => {
+    setList(shuffleChoices(steps));
+    setFull(whole);
     setPos(0);
     setAnswer(null);
     setHint(false);
@@ -114,11 +118,11 @@ export default function QuizPlayer({ quiz, note, onNew }: { quiz: SavedQuiz; not
         )}
         <div className="row wrap" style={{ gap: 8 }}>
           {failed.length > 0 && (
-            <button className="btn secondary grow" onClick={() => begin(failed)}>
+            <button className="btn secondary grow" onClick={() => begin(failed, false)}>
               <RotateCcw size={17} /> Repetir fallos
             </button>
           )}
-          <button className="btn secondary grow" onClick={() => begin(quiz.steps)}>
+          <button className="btn secondary grow" onClick={() => begin(quiz.steps, true)}>
             <RotateCcw size={17} /> Otra vez
           </button>
           {onNew && !quiz.fromCards && (
@@ -142,7 +146,7 @@ export default function QuizPlayer({ quiz, note, onNew }: { quiz: SavedQuiz; not
     if (pos + 1 < list.length) setPos(pos + 1);
     else {
       // Solo cuenta para tu nota la vuelta completa (no «Repetir fallos»).
-      if (list === quiz.steps) update((s) => recordAttempt(s, quiz.id, results.filter(Boolean).length, list.length));
+      if (full) update((s) => recordAttempt(s, quiz.id, results.filter(Boolean).length, list.length));
       setFinished(true);
     }
   };

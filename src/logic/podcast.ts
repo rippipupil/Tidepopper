@@ -1,5 +1,6 @@
 // Pódcast interactivo: estilos, presentadores, preguntas que lo pausan y trozos de audio.
 import type { Podcast, PodcastLine, PodcastStyle } from '../data/types';
+import { shuffleChoices } from './lesson';
 
 export interface StyleInfo {
   label: string;
@@ -59,6 +60,18 @@ export function hostsOf(p: Podcast): [string, string] {
 
 export function isQuestion(l: PodcastLine): boolean {
   return (l.options?.length ?? 0) >= 2 && typeof l.answer === 'number' && l.answer >= 0 && l.answer < l.options!.length;
+}
+
+/**
+ * Desordena las opciones de las preguntas al oyente para que la buena no sea siempre la misma
+ * posición. No toca las que dicen las opciones por su letra en voz alta («¿a), b) o c)?»).
+ */
+export function shuffleQuestions(lines: PodcastLine[], rnd: () => number = Math.random): PodcastLine[] {
+  const qs = lines.map((l, k) => ({ k, l })).filter(({ l }) => isQuestion(l) && !/(^|\s)[a-d]\)|\bopci[oó]n [a-d]\b/i.test(l.text));
+  const steps = qs.map(({ l }) => ({ type: 'elige' as const, emoji: '', text: l.text, example: '', options: l.options!, answer: l.answer!, pairs: [], accepted: [], explanation: '' }));
+  const out = lines.slice();
+  shuffleChoices(steps, rnd).forEach((s, i) => (out[qs[i].k] = { ...out[qs[i].k], options: s.options, answer: s.answer }));
+  return out;
 }
 
 /** Lo que dice el otro presentador después de que respondas. */

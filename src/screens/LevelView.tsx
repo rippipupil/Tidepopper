@@ -3,7 +3,7 @@ import { useApp } from '../data/store';
 import { finishLevel, setLevelContent } from '../data/actions';
 import { uid } from '../data/db';
 import { levelState, PASS_PCT } from '../logic/course';
-import { encourage, isExercise, praise, stepsOf } from '../logic/lesson';
+import { encourage, isExercise, praise, shuffleChoices, stepsOf } from '../logic/lesson';
 import { StepView } from '../components/Steps';
 import { go } from '../router';
 import { Loading, TopBar } from '../components/ui';
@@ -50,7 +50,7 @@ export default function LevelView({ id, index }: { id: string; index: number }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, index]);
 
-  const steps = useMemo(() => (level?.content ? stepsOf(level.content) : []), [level?.content]);
+  const steps = useMemo(() => (level?.content ? shuffleChoices(stepsOf(level.content)) : []), [level?.content]);
   useEffect(() => {
     if (steps.length && !queue) setQueue(steps.map((_, k) => k));
   }, [steps, queue]);

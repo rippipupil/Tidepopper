@@ -4,7 +4,7 @@ import { Mic2, Pause, Play, RefreshCw, SkipBack, SkipForward, Sparkles, Volume2 
 import { useApp } from '../../data/store';
 import { setSettings, updateNote } from '../../data/actions';
 import { deviceVoices, estimateSeconds, speak, stopSpeaking, type DeviceVoice } from '../../logic/speech';
-import { feedbackText, GEMINI_VOICES, hostsOf, isQuestion, lineAtTime, segments, STYLES } from '../../logic/podcast';
+import { feedbackText, GEMINI_VOICES, hostsOf, isQuestion, lineAtTime, segments, shuffleQuestions, STYLES } from '../../logic/podcast';
 import type { Note, Podcast, PodcastLength, PodcastStyle, PodcastVoices } from '../../data/types';
 import { Loading, Sheet, toast } from '../../components/ui';
 
@@ -32,13 +32,13 @@ export default function PodcastTab({ note }: { note: Note }) {
     try {
       const { generatePodcast } = await import('../../ai/tasks');
       const p = await generatePodcast(state.settings, note, length, style);
-      const lines = p.lines
+      const lines = shuffleQuestions(p.lines
         .filter((l) => l.text.trim())
         .map((l) => {
           const base = { host: (l.host === 1 ? 1 : 0) as 0 | 1, text: l.text.trim() };
           const q = { ...base, options: l.options.map((o) => o.trim()).filter(Boolean), answer: l.answer, explanation: l.explanation.trim() };
           return isQuestion(q) ? q : base;
-        });
+        }));
       if (!lines.length) throw new Error('El guion llegó vacío. Prueba otra vez.');
       // El audio guardado del episodio anterior ya no sirve.
       for (const k of await idbKeys()) if (String(k).startsWith(`podaudio:${note.id}:`)) await del(k);
