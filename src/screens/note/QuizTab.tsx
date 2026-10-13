@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Lightbulb, RotateCcw, SendHorizontal, Sparkles, Target, Zap } from 'lucide-react';
+import { Lightbulb, NotebookPen, RotateCcw, SendHorizontal, Sparkles, Target, Zap } from 'lucide-react';
 import { useApp } from '../../data/store';
-import { noteCards, recordQuiz } from '../../data/actions';
+import { noteCards, recordQuiz, reviseNote } from '../../data/actions';
 import { quizFromCards } from '../../logic/quiz';
 import { encourage, praise } from '../../logic/lesson';
 import { cleanTitle, parseQuizRequest, splitSections, type QuizRequest } from '../../logic/sections';
 import type { LessonStep, Note, QuizLevel } from '../../data/types';
 import { StepView } from '../../components/Steps';
-import { Loading } from '../../components/ui';
+import { Loading, toast } from '../../components/ui';
 
 const LEVELS: { id: QuizLevel; label: string; text: string }[] = [
   { id: 'basico', label: 'Básico', text: 'Lo principal' },
@@ -38,6 +38,7 @@ export default function QuizTab({ note, request }: { note: Note; request?: { tex
   const [ask, setAsk] = useState('');
   const [current, setCurrent] = useState<Current | null>(null);
   const handled = useRef<number | null>(null);
+  const [fixing, setFixing] = useState<'busy' | string | null>(null);
   const [level, setLevel] = useState<QuizLevel>('medio');
   const [count, setCount] = useState(10);
   const [qs, setQs] = useState<LessonStep[] | null>(null);
@@ -50,6 +51,7 @@ export default function QuizTab({ note, request }: { note: Note; request?: { tex
   const [finished, setFinished] = useState(false);
 
   const begin = (list: LessonStep[]) => {
+    setFixing(null);
     setQs(list);
     setPos(0);
     setAnswer(null);
@@ -103,6 +105,29 @@ export default function QuizTab({ note, request }: { note: Note; request?: { tex
     const correct = results.filter(Boolean).length;
     const pct = Math.round((100 * correct) / qs.length);
     const failed = qs.filter((_, k) => !results[k]);
+    /** Mejora los apuntes (o el tema del quiz) para que expliquen bien lo que ha fallado. */
+    const reinforce = async () => {
+      setFixing('busy');
+      try {
+        const { editNote, describeAiError } = await import('../../ai/tasks');
+        const one = current?.sections?.length === 1 ? sections.find((x) => x.id === current.sections![0]) : undefined;
+        const request =
+          `${one ? `Mejora el tema ${one.n}` : 'Mejora los apuntes'} para que expliquen con claridad lo que he fallado en un quiz: añade lo que falte, aclara las confusiones ` +
+          'y pon un aviso «> ⚠️ » con el error típico donde ayude. Mis fallos:\n' +
+          failed.map((f) => `- ${f.text} → correcta: ${answerText(f)}${f.explanation ? ` (${f.explanation})` : ''}`).join('\n');
+        try {
+          const out = await editNote(state.settings, note, request, [], one ? { mode: 'section', section: one } : { mode: 'patch' });
+          if (!out) return setFixing('Tus apuntes ya explican bien estos puntos: no he cambiado nada.');
+          update((s) => reviseNote(s, note.id, out.markdown, `Reforzado con tus fallos: ${out.change}`));
+          toast('Apuntes mejorados');
+          setFixing(`✏️ ${out.change} (puedes deshacerlo en Apuntes → Versiones)`);
+        } catch (e) {
+          setFixing(describeAiError(e));
+        }
+      } catch {
+        setFixing(null);
+      }
+    };
     return (
       <div className="col fadein" style={{ gap: 16 }}>
         <section className="card pad col pop" style={{ alignItems: 'center', textAlign: 'center', gap: 6 }}>
@@ -113,6 +138,19 @@ export default function QuizTab({ note, request }: { note: Note; request?: { tex
             {correct} de {qs.length} correctas
           </div>
         </section>
+        {failed.length > 0 && note.markdown.trim() && (
+          fixing === null ? (
+            <button className="btn secondary block" onClick={() => void reinforce()}>
+              <NotebookPen size={17} /> Mejorar mis apuntes con estos fallos
+            </button>
+          ) : fixing === 'busy' ? (
+            <div className="alert info row" style={{ gap: 8 }}>
+              <div className="spinner" style={{ width: 16, height: 16 }} /> Mejorando tus apuntes con lo que has fallado…
+            </div>
+          ) : (
+            <div className="alert info fadein">{fixing}</div>
+          )
+        )}
         {failed.length > 0 && (
           <section className="col" style={{ gap: 10 }}>
             <h2>Repasa tus fallos</h2>
@@ -125,7 +163,7 @@ export default function QuizTab({ note, request }: { note: Note; request?: { tex
             ))}
           </section>
         )}
-        <div className="row">
+        <div className="row wrap" style={{ gap: 8 }}>
           {failed.length > 0 && (
             <button className="btn secondary grow" onClick={() => begin(failed)}>
               <RotateCcw size={17} /> Repetir fallos
@@ -133,10 +171,10 @@ export default function QuizTab({ note, request }: { note: Note; request?: { tex
           )}
           {current?.request && (
             <button className="btn secondary grow" onClick={() => void make(current.request)}>
-              <Target size={17} /> Otro de este tema
+              <Target size={17} /> Otro del tema
             </button>
           )}
-          <button className="btn grow" onClick={() => (setQs(null), setCurrent(null))}>
+          <button className="btn grow" style={{ flexBasis: '100%' }} onClick={() => (setQs(null), setCurrent(null))}>
             Nuevo quiz
           </button>
         </div>

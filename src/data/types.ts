@@ -139,6 +139,16 @@ export interface Note {
   podcast?: Podcast;
   quizzes: QuizRecord[];
   course?: Course;
+  /** Versiones anteriores de los apuntes (la más reciente al final), para deshacer cambios. */
+  revisions?: Revision[];
+}
+
+export interface Revision {
+  /** Cuándo se guardó esta versión (justo antes del cambio). */
+  at: number;
+  markdown: string;
+  /** El cambio que vino después: «Añadido un ejemplo al tema 2». */
+  reason: string;
 }
 
 /** Programación de repaso de una tarjeta (repetición espaciada). */
@@ -170,6 +180,8 @@ export interface ChatMsg {
   at: number;
   /** Respuesta del chat que ofrece empezar un quiz a medida con esta petición. */
   quiz?: string;
+  /** Respuesta del chat que ha cambiado los apuntes: la versión de antes y dónde mirar. */
+  edit?: { revision: number; section?: string; undone?: boolean };
 }
 
 export type Theme = 'system' | 'dark' | 'light';

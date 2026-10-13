@@ -47,6 +47,31 @@ export function updateNote(s: AppState, id: string, patch: Partial<Note>, now = 
   return { ...s, notes: s.notes.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: now } : n)) };
 }
 
+const MAX_REVISIONS = 20;
+
+/** Cambia los apuntes guardando la versión anterior para poder volver a ella. */
+export function reviseNote(s: AppState, id: string, markdown: string, reason: string, now = Date.now()): AppState {
+  return {
+    ...s,
+    notes: s.notes.map((n) =>
+      n.id === id && n.markdown !== markdown ? { ...n, markdown, updatedAt: now, revisions: [...(n.revisions ?? []), { at: now, markdown: n.markdown, reason }].slice(-MAX_REVISIONS) } : n,
+    ),
+  };
+}
+
+/** Vuelve a una versión anterior (la actual también se guarda, por si acaso). */
+export function restoreRevision(s: AppState, id: string, at: number, now = Date.now()): AppState {
+  const rev = s.notes.find((n) => n.id === id)?.revisions?.find((r) => r.at === at);
+  return rev ? reviseNote(s, id, rev.markdown, `Vuelta a la versión de antes de: ${rev.reason}`, now) : s;
+}
+
+/** Marca en el chat que un cambio de los apuntes se ha deshecho. */
+export function markEditUndone(s: AppState, noteId: string, revision: number): AppState {
+  const msgs = s.chats[noteId];
+  if (!msgs) return s;
+  return { ...s, chats: { ...s.chats, [noteId]: msgs.map((m) => (m.edit?.revision === revision ? { ...m, edit: { ...m.edit, undone: true } } : m)) } };
+}
+
 export function deleteNote(s: AppState, id: string): AppState {
   const chats = { ...s.chats };
   delete chats[id];

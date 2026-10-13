@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Check, ListTree, Pencil, Sparkles, Undo2, Wand2 } from 'lucide-react';
+import { Check, History, ListTree, MessageCircle, Pencil, Sparkles, Undo2, Wand2 } from 'lucide-react';
 import { useApp } from '../../data/store';
-import { updateNote } from '../../data/actions';
+import { restoreRevision, reviseNote } from '../../data/actions';
 import { outline } from '../../logic/markdown';
 import type { Note } from '../../data/types';
 import type { NoteAction } from '../../ai/tasks';
 import Markdown from '../../components/Markdown';
-import { Sheet, toast } from '../../components/ui';
+import { Sheet, timeAgo, toast } from '../../components/ui';
 
 const ACTIONS: { id: NoteAction; label: string; emoji: string; text: string }[] = [
   { id: 'simplificar', label: 'Más fácil', emoji: '🧒', text: 'Explicado más sencillo y corto' },
@@ -15,7 +15,9 @@ const ACTIONS: { id: NoteAction; label: string; emoji: string; text: string }[] 
   { id: 'traducir', label: 'Traducir', emoji: '🌍', text: 'A otro idioma' },
 ];
 
-export default function NotesTab({ note }: { note: Note }) {
+const ACTION_REASON: Record<NoteAction, string> = { simplificar: 'Apuntes simplificados', ampliar: 'Apuntes ampliados con más detalle', ejemplos: 'Añadidos ejemplos', traducir: 'Apuntes traducidos' };
+
+export default function NotesTab({ note, onChat }: { note: Note; onChat?: () => void }) {
   const { state, update } = useApp();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.markdown);
@@ -23,6 +25,7 @@ export default function NotesTab({ note }: { note: Note }) {
   const [undo, setUndo] = useState<string | null>(null);
   const [aiSheet, setAiSheet] = useState(false);
   const [toc, setToc] = useState(false);
+  const [historySheet, setHistorySheet] = useState(false);
   const [lang, setLang] = useState('inglés');
   const sections = useMemo(() => outline(note.markdown), [note.markdown]);
 
@@ -34,7 +37,7 @@ export default function NotesTab({ note }: { note: Note }) {
       const md = await transformNote(state.settings, note, a, lang);
       if (md.length < 40) throw new Error('La respuesta llegó vacía.');
       setUndo(note.markdown);
-      update((s) => updateNote(s, note.id, { markdown: md }));
+      update((s) => reviseNote(s, note.id, md, a === 'traducir' ? `Apuntes traducidos al ${lang}` : ACTION_REASON[a]));
       toast('Apuntes actualizados');
     } catch (e) {
       const { describeAiError } = await import('../../ai/tasks');
@@ -57,7 +60,7 @@ export default function NotesTab({ note }: { note: Note }) {
             className="btn grow"
             onClick={() => {
               setUndo(note.markdown);
-              update((s) => updateNote(s, note.id, { markdown: draft }));
+              update((s) => reviseNote(s, note.id, draft, 'Editado a mano'));
               setEditing(false);
             }}
           >
@@ -100,11 +103,21 @@ export default function NotesTab({ note }: { note: Note }) {
         <button className="btn secondary sm" onClick={() => (setDraft(note.markdown), setEditing(true))}>
           <Pencil size={16} /> Editar
         </button>
+        {(note.revisions?.length ?? 0) > 0 && (
+          <button className="btn secondary sm" onClick={() => setHistorySheet(true)}>
+            <History size={16} /> Versiones
+          </button>
+        )}
+        {onChat && (
+          <button className="btn ghost sm" onClick={onChat}>
+            <MessageCircle size={16} /> Cambiar con el chat
+          </button>
+        )}
         {undo !== null && (
           <button
             className="btn ghost sm"
             onClick={() => {
-              update((s) => updateNote(s, note.id, { markdown: undo }));
+              update((s) => reviseNote(s, note.id, undo, 'Deshecho el último cambio'));
               setUndo(null);
             }}
           >
@@ -127,6 +140,30 @@ export default function NotesTab({ note }: { note: Note }) {
       <article className="card pad" style={{ padding: '22px 20px' }}>
         {note.markdown.trim() ? <Markdown text={note.markdown} /> : <p className="muted">Esta nota aún no tiene apuntes. Pulsa «Editar» para escribirlos.</p>}
       </article>
+
+      {historySheet && (
+        <Sheet title="Versiones de tus apuntes" onClose={() => setHistorySheet(false)}>
+          <p className="muted small">Cada cambio (desde el chat, «Mejorar con IA» o editando a mano) guarda cómo estaban antes. Puedes volver a cualquiera; la versión actual también se guarda.</p>
+          {[...(note.revisions ?? [])].reverse().map((r) => (
+            <div key={r.at} className="card pad row" style={{ gap: 10 }}>
+              <span className="grow col" style={{ gap: 2, minWidth: 0 }}>
+                <span style={{ fontWeight: 600 }}>{r.reason}</span>
+                <span className="muted small">{timeAgo(r.at)}</span>
+              </span>
+              <button
+                className="btn secondary sm"
+                onClick={() => {
+                  update((s) => restoreRevision(s, note.id, r.at));
+                  setHistorySheet(false);
+                  toast('Apuntes restaurados');
+                }}
+              >
+                <Undo2 size={15} /> Volver a antes
+              </button>
+            </div>
+          ))}
+        </Sheet>
+      )}
 
       {aiSheet && (
         <Sheet title="Mejorar con IA" onClose={() => setAiSheet(false)}>

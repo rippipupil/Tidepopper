@@ -11,25 +11,29 @@ export interface Section {
   id: string;
   /** El texto del tema, con su título y sus subapartados. */
   body: string;
+  /** Líneas que ocupa en los apuntes: [start, end). */
+  start: number;
+  end: number;
 }
 
 /** Parte los apuntes en temas por sus títulos «## » (sin contar los que hay dentro de bloques de código). */
 export function splitSections(md: string): Section[] {
   const out: Section[] = [];
   let fence = false;
-  let cur: { title: string; lines: string[] } | null = null;
-  const push = () => {
-    if (cur) out.push({ n: out.length + 1, title: cur.title, id: slug(cur.title), body: cur.lines.join('\n').trim() });
+  let cur: { title: string; lines: string[]; start: number } | null = null;
+  const lines = md.split('\n');
+  const push = (end: number) => {
+    if (cur) out.push({ n: out.length + 1, title: cur.title, id: slug(cur.title), body: cur.lines.join('\n').trim(), start: cur.start, end });
   };
-  for (const line of md.split('\n')) {
+  lines.forEach((line, i) => {
     if (/^```/.test(line.trim())) fence = !fence;
     const m = !fence && /^##\s+(.+?)\s*#*\s*$/.exec(line);
     if (m) {
-      push();
-      cur = { title: m[1].replace(/[*_`]/g, '').trim(), lines: [line] };
+      push(i);
+      cur = { title: m[1].replace(/[*_`]/g, '').trim(), lines: [line], start: i };
     } else cur?.lines.push(line);
-  }
-  push();
+  });
+  push(lines.length);
   return out;
 }
 

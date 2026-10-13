@@ -119,7 +119,7 @@ export default function NoteScreen({ id, tab: initial }: { id: string; tab?: str
       </TopBar>
       <main className="page" style={{ gap: 16 }}>
         <Tabs tabs={tabs} value={tab} onChange={setTab} />
-        {tab === 'apuntes' && <NotesTab note={note} />}
+        {tab === 'apuntes' && <NotesTab note={note} onChat={() => setTab('chat')} />}
         {tab === 'lecciones' && note.course && <LessonsTab note={note} />}
         {tab === 'tarjetas' && <CardsTab note={note} />}
         {tab === 'quiz' && <QuizTab note={note} request={quizRequest} />}
@@ -128,7 +128,12 @@ export default function NoteScreen({ id, tab: initial }: { id: string; tab?: str
             note={note}
             onCite={(sec) => {
               setTab('apuntes');
-              window.setTimeout(() => document.getElementById(sec)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+              window.setTimeout(() => {
+                const el = sec ? document.getElementById(sec) : null;
+                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                el?.classList.add('flash');
+                window.setTimeout(() => el?.classList.remove('flash'), 2200);
+              }, 120);
             }}
             onQuiz={(text) => {
               setQuizRequest({ text, key: Date.now() });

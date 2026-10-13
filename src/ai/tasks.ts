@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { structured, text, type AiKeys, type AiPart } from './engine';
 import type { LevelContent, Note, PodcastLength, PodcastStyle, QuizLevel, LessonStep } from '../data/types';
 import { STYLES } from '../logic/podcast';
+import { applyPatch, changedHeading, editScope, looksTruncated, parseEditOutput, replaceSection, type EditScope } from '../logic/noteEdit';
 import { cleanSteps, isExercise, lessonText, quizOf } from '../logic/lesson';
 
 // Tareas de la IA. Cada una se resuelve con la primera IA disponible: Claude,
@@ -238,10 +239,75 @@ export function chatReply(keys: AiKeys, note: Note, history: { role: 'user' | 'a
       'Puedes usar Markdown sencillo (negrita, listas) y fórmulas $...$. ' +
       'Si te basas en los apuntes, cita la sección al final de la frase así: [[Nombre exacto de la sección]]. ' +
       (sections.length ? `Secciones disponibles: ${sections.map((x) => `[[${x}]]`).join(', ')}. ` : '') +
-      'Si la pregunta no tiene que ver con los apuntes, responde igualmente con lo que sabes y dilo.\n\n' +
+      'Si la pregunta no tiene que ver con los apuntes, responde igualmente con lo que sabes y dilo. ' +
+      'Tú no cambias los apuntes al responder; si el alumno quiere cambiarlos, puede pedírtelo con una orden («añade…», «corrige…») o pulsar «Guardar en apuntes» bajo tu respuesta.\n\n' +
       `Apuntes «${note.title}»:\n${noteContext(note, 40000)}`,
     history,
   });
+}
+
+// ---------- Cambiar los apuntes desde el chat ----------
+
+const EDIT_STYLE = NOTE_RULES.split('\nSé fiel')[0].split('\n').slice(1).join('\n').replace('del campo «markdown» ', '');
+
+export interface NoteEditOut {
+  markdown: string;
+  change: string;
+  /** Id del título donde está el cambio, para llevar al alumno a verlo. */
+  section?: string;
+}
+
+/**
+ * Cambia los apuntes según lo que pide el alumno en el chat («añade un ejemplo al tema 2»,
+ * «guarda esto en los apuntes»…). Solo reescribe lo necesario y comprueba que no se pierde nada.
+ * Devuelve null si la IA dice que no hay nada que cambiar.
+ */
+export async function editNote(
+  keys: AiKeys,
+  note: Note,
+  request: string,
+  history: { role: 'user' | 'assistant'; text: string }[] = [],
+  scope: EditScope = editScope(request, note.markdown),
+): Promise<NoteEditOut | null> {
+  const convo = history.length ? `Conversación reciente (por si pide guardar algo que se ha dicho):\n${history.map((m) => `${m.role === 'user' ? 'ALUMNO' : 'ASISTENTE'}: ${m.text}`).join('\n\n')}\n\n` : '';
+  const what =
+    scope.mode === 'section'
+      ? 'Te doy SOLO un tema de los apuntes. Devuelve ese tema entero ya cambiado, empezando por su título «## » (puedes mejorar el título si hace falta).'
+      : scope.mode === 'patch'
+        ? 'Te doy los apuntes enteros. Devuelve SOLO los temas «## » que cambian o que son nuevos, cada uno entero y con su título; los que no cambian NO los escribas. Para cambiar un tema usa exactamente su mismo título. Para borrar un tema entero escribe su título y debajo solo «ELIMINAR». Si es algo nuevo, mételo en el tema que corresponda o crea un tema nuevo con su emoji.'
+        : 'Te doy los apuntes enteros. Devuélvelos enteros, ya cambiados, sin perder nada de lo que no pide cambiar.';
+  const raw = await text(keys, {
+    maxTokens: 16000,
+    system:
+      'Editas los apuntes en Markdown de un estudiante según lo que pide. Aplica el cambio pedido con cuidado, integrado donde corresponda y con el mismo estilo; ' +
+      'todo lo demás se queda igual (mismos títulos, emojis, tablas, fórmulas y diagramas). Si pide corregir algo, comprueba que la corrección es correcta. No inventes datos dudosos.\n' +
+      `${what}\n\nEstilo de los apuntes:\n${EDIT_STYLE}\n\n` +
+      'Responde EXACTAMENTE así, sin nada más:\nCAMBIO: <qué has cambiado, en una frase corta>\n---\n<el Markdown>\n\n' +
+      'Si lo que pide no es un cambio en los apuntes o no se puede hacer, responde solo: CAMBIO: NINGUNO <por qué, en una frase>',
+    history: [
+      {
+        role: 'user',
+        text:
+          convo +
+          `Petición del alumno: «${request}»\n\n` +
+          (scope.mode === 'section' ? `Tema ${scope.section.n} de los apuntes «${note.title}»:\n\n${scope.section.body}` : `Apuntes «${note.title}»:\n\n${note.markdown}`),
+      },
+    ],
+  });
+  const out = parseEditOutput(raw);
+  if (!out) return null;
+  let markdown: string;
+  if (scope.mode === 'section') {
+    if (looksTruncated(scope.section.body, out.markdown, request)) throw new Error('La IA devolvió el tema incompleto, así que no he tocado tus apuntes. Prueba otra vez.');
+    markdown = replaceSection(note.markdown, scope.section, out.markdown);
+  } else if (scope.mode === 'patch') {
+    markdown = applyPatch(note.markdown, out.markdown);
+  } else {
+    if (looksTruncated(note.markdown, out.markdown, request)) throw new Error('La IA devolvió los apuntes incompletos, así que no los he tocado. Prueba otra vez o pide el cambio tema a tema.');
+    markdown = out.markdown;
+  }
+  if (markdown.trim() === note.markdown.trim()) return null;
+  return { markdown, change: out.change, section: changedHeading(note.markdown, markdown) };
 }
 
 // ---------- Asistente IA: cursos por niveles ----------

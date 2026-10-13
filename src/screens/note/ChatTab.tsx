@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ListChecks, SendHorizontal, Trash2 } from 'lucide-react';
+import { Eye, ListChecks, NotebookPen, SendHorizontal, Trash2, Undo2 } from 'lucide-react';
 import { useApp } from '../../data/store';
-import { addChat, clearChat } from '../../data/actions';
+import { addChat, clearChat, markEditUndone, restoreRevision, reviseNote } from '../../data/actions';
 import type { ChatMsg, Note } from '../../data/types';
 import Markdown from '../../components/Markdown';
 import { isQuizRequest, parseQuizRequest, splitSections } from '../../logic/sections';
+import { isEditRequest } from '../../logic/noteEdit';
+import { toast } from '../../components/ui';
 
-const SUGGESTIONS = ['Resúmelo en 3 frases', 'Explícamelo como si tuviera 10 años', 'Ponme un ejemplo de la vida real', '¿Qué es lo más probable que caiga en el examen?', 'Quiz sobre el tema 1'];
+const SUGGESTIONS = ['Resúmelo en 3 frases', 'Explícamelo como si tuviera 10 años', '¿Qué es lo más probable que caiga en el examen?', 'Quiz sobre el tema 1', 'Añade un ejemplo de la vida real al tema 1'];
+
+const SAVE_REQUEST = 'Guarda en mis apuntes lo que me acabas de explicar, en el tema que corresponda';
 
 export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: (section: string) => void; onQuiz: (request: string) => void }) {
   const { state, update } = useApp();
@@ -16,7 +20,7 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
     const q = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('q');
     return q ?? '';
   });
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState('');
   const end = useRef<HTMLDivElement>(null);
 
@@ -31,6 +35,10 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
     update((s) => addChat(s, note.id, mine));
     setText('');
     setErr('');
+    if (isEditRequest(q)) {
+      await edit(q, [...msgs, mine].slice(-7, -1));
+      return;
+    }
     if (isQuizRequest(q)) {
       // «quiz sobre el tema 2»: en vez de contestar, prepara un quiz solo de ese tema.
       const r = parseQuizRequest(q, sections);
@@ -47,7 +55,7 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
       onQuiz(q);
       return;
     }
-    setBusy(true);
+    setBusy('Pensando…');
     try {
       const { chatReply } = await import('../../ai/tasks');
       const reply = await chatReply(state.settings, note, [...msgs, mine].slice(-16));
@@ -56,8 +64,52 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
       const { describeAiError } = await import('../../ai/tasks');
       setErr(describeAiError(e));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
+  };
+
+  /** Cambia los apuntes con lo que pide («añade un ejemplo al tema 2») y lo cuenta en el chat. */
+  const edit = async (request: string, context: ChatMsg[]) => {
+    setBusy('Cambiando tus apuntes…');
+    try {
+      const { editNote } = await import('../../ai/tasks');
+      const out = await editNote(state.settings, note, request, context.map(({ role, text }) => ({ role, text })));
+      const at = Date.now();
+      if (!out) {
+        update((s) => addChat(s, note.id, { role: 'assistant', text: 'No he cambiado nada: no he visto qué cambiar en los apuntes. Dime qué añadir, quitar o corregir, por ejemplo «añade un ejemplo al tema 2».', at }));
+        return;
+      }
+      update((s) =>
+        addChat(reviseNote(s, note.id, out.markdown, out.change, at), note.id, {
+          role: 'assistant',
+          text: `✏️ **He actualizado tus apuntes.** ${out.change}`,
+          at,
+          edit: { revision: at, section: out.section },
+        }),
+      );
+      toast('Apuntes actualizados');
+    } catch (e) {
+      const { describeAiError } = await import('../../ai/tasks');
+      setErr(describeAiError(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveReply = (k: number) => {
+    if (busy) return;
+    const mine: ChatMsg = { role: 'user', text: '📌 Guarda esta respuesta en mis apuntes', at: Date.now() };
+    update((s) => addChat(s, note.id, mine));
+    setErr('');
+    void edit(SAVE_REQUEST, msgs.slice(Math.max(0, k - 3), k + 1));
+  };
+
+  const undo = (m: ChatMsg) => {
+    if (!m.edit) return;
+    const later = (note.revisions ?? []).filter((r) => r.at > m.edit!.revision).length;
+    if (later && !confirm(`Después de este cambio hubo ${later} más. Si lo deshaces, los apuntes vuelven a como estaban antes de él (y se pierden también los posteriores). ¿Seguir?`)) return;
+    update((s) => markEditUndone(restoreRevision(s, note.id, m.edit!.revision), note.id, m.edit!.revision));
+    toast('Cambio deshecho');
   };
 
   return (
@@ -66,7 +118,7 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
         <div className="col" style={{ alignItems: 'center', textAlign: 'center', gap: 10, padding: '20px 4px' }}>
           <div style={{ fontSize: 40 }}>💬</div>
           <h2>Pregúntale a tus apuntes</h2>
-          <p className="muted small">La IA responde con tu material delante y te dice de qué sección lo saca. Pide también quizzes: «quiz sobre el tema 2».</p>
+          <p className="muted small">La IA responde con tu material delante y te dice de qué sección lo saca. También puedes pedirle quizzes («quiz sobre el tema 2») o que mejore tus apuntes («añade un ejemplo al tema 2», «corrige…»).</p>
           <div className="row wrap" style={{ justifyContent: 'center', gap: 8, marginTop: 6 }}>
             {SUGGESTIONS.map((s) => (
               <button key={s} className="chip" onClick={() => void send(s)}>
@@ -96,12 +148,33 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
                   <ListChecks size={16} /> Hacer este quiz
                 </button>
               )}
+              {m.edit && (
+                <div className="row wrap" style={{ gap: 8, marginTop: 8 }}>
+                  {m.edit.undone ? (
+                    <span className="tag">Cambio deshecho</span>
+                  ) : (
+                    <>
+                      <button className="btn sm" onClick={() => onCite(m.edit!.section ?? '')}>
+                        <Eye size={16} /> Ver en apuntes
+                      </button>
+                      <button className="btn ghost sm" onClick={() => undo(m)}>
+                        <Undo2 size={16} /> Deshacer
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              {!m.quiz && !m.edit && !m.text.startsWith('No he cambiado nada') && (
+                <button className="btn ghost sm" style={{ marginTop: 6, marginLeft: -8 }} onClick={() => saveReply(k)} disabled={!!busy}>
+                  <NotebookPen size={15} /> Guardar en apuntes
+                </button>
+              )}
             </div>
           ),
         )}
         {busy && (
           <div className="bubble ai row" style={{ gap: 8 }}>
-            <div className="spinner" style={{ width: 16, height: 16 }} /> <span className="muted small">Pensando…</span>
+            <div className="spinner" style={{ width: 16, height: 16 }} /> <span className="muted small">{busy}</span>
           </div>
         )}
         {err && <div className="alert bad">{err}</div>}
@@ -122,7 +195,7 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
           id="ask"
           rows={1}
           value={text}
-          placeholder="Pregunta o pide un quiz…"
+          placeholder="Pregunta, pide un quiz o un cambio…"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -131,7 +204,7 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
             }
           }}
         />
-        <button type="submit" className="btn" style={{ width: 46, height: 46, padding: 0, minHeight: 46 }} aria-label="Enviar" disabled={busy || !text.trim()}>
+        <button type="submit" className="btn" style={{ width: 46, height: 46, padding: 0, minHeight: 46 }} aria-label="Enviar" disabled={!!busy || !text.trim()}>
           <SendHorizontal size={20} />
         </button>
       </form>

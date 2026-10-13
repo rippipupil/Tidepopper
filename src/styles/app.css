@@ -277,6 +277,9 @@ textarea.field { resize: vertical; min-height: 120px; line-height: 1.5; }
 .level-dot.current { background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 6px var(--accent-soft); }
 
 /* ---------- Animaciones ---------- */
+/* Resalta un título al saltar a él desde el chat. */
+.flash { animation: flash 2s ease-out; border-radius: 8px; }
+@keyframes flash { 0%, 30% { background: var(--accent-soft); box-shadow: 0 0 0 6px var(--accent-soft); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes up { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }

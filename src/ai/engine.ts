@@ -43,6 +43,8 @@ export interface StructuredReq<T> {
 export interface TextReq {
   system: string;
   history: { role: 'user' | 'assistant'; text: string }[];
+  /** Para respuestas largas (por ejemplo, reescribir unos apuntes enteros). */
+  maxTokens?: number;
 }
 
 // ---------- Claude ----------
@@ -92,7 +94,7 @@ async function claudeText(key: string, r: TextReq): Promise<string> {
   try {
     const res = await claude(key).beta.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 4000,
+      max_tokens: r.maxTokens ?? 4000,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'low' },
