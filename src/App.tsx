@@ -8,6 +8,8 @@ import Review from './screens/Review';
 import Settings from './screens/Settings';
 import NoteScreen from './screens/note/NoteScreen';
 import LevelView from './screens/LevelView';
+import Quizzes from './screens/Quizzes';
+import QuizScreen from './screens/QuizScreen';
 import ManualAi from './components/ManualAi';
 import { Loading, ToastHost } from './components/ui';
 import type { Theme } from './data/types';
@@ -46,6 +48,8 @@ function Screen() {
     if (sub === 'nivel') return <LevelView key={`${id}-${n}`} id={id} index={Number(n)} />;
     return <NoteScreen key={id} id={id} tab={query.get('tab') ?? undefined} />;
   }
+  if (a === 'quiz' && id) return <QuizScreen key={id} id={id} from={query.get('from') ?? undefined} />;
+  if (a === 'quizzes') return <Quizzes key={query.toString()} />;
   if (a === 'grabar') return <Record />;
   if (a === 'tema') return <Topic />;
   if (a === 'repasar') return <Review />;

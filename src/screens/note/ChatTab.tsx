@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, ListChecks, NotebookPen, SendHorizontal, Trash2, Undo2 } from 'lucide-react';
 import { useApp } from '../../data/store';
-import { addChat, clearChat, markEditUndone, restoreRevision, reviseNote } from '../../data/actions';
+import { addChat, clearChat, markEditUndone, restoreRevision, reviseNote, saveQuiz } from '../../data/actions';
+import { createQuiz, LEVEL_LABEL } from '../../data/quizzes';
+import { go } from '../../router';
 import type { ChatMsg, Note } from '../../data/types';
 import Markdown from '../../components/Markdown';
 import { isQuizRequest, parseQuizRequest, splitSections } from '../../logic/sections';
@@ -12,7 +14,7 @@ const SUGGESTIONS = ['Resúmelo en 3 frases', 'Explícamelo como si tuviera 10 a
 
 const SAVE_REQUEST = 'Guarda en mis apuntes lo que me acabas de explicar, en el tema que corresponda';
 
-export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: (section: string) => void; onQuiz: (request: string) => void }) {
+export default function ChatTab({ note, onCite }: { note: Note; onCite: (section: string) => void }) {
   const { state, update } = useApp();
   const sections = useMemo(() => splitSections(note.markdown), [note.markdown]);
   const msgs = state.chats[note.id] ?? [];
@@ -40,19 +42,7 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
       return;
     }
     if (isQuizRequest(q)) {
-      // «quiz sobre el tema 2»: en vez de contestar, prepara un quiz solo de ese tema.
-      const r = parseQuizRequest(q, sections);
-      const what = r.sections.length ? `**${r.focus}**` : `lo que me pides («${q}»)`;
-      const extra = [r.count && `${r.count} preguntas`, r.level && `nivel ${r.level === 'basico' ? 'básico' : r.level}`].filter(Boolean).join(', ');
-      update((s) =>
-        addChat(s, note.id, {
-          role: 'assistant',
-          text: `¡Hecho! Te preparo un quiz solo sobre ${what}${extra ? ` (${extra})` : ''}, entrando a fondo en todos sus detalles.`,
-          at: Date.now(),
-          quiz: q,
-        }),
-      );
-      onQuiz(q);
+      await quiz(q);
       return;
     }
     setBusy('Pensando…');
@@ -60,6 +50,34 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
       const { chatReply } = await import('../../ai/tasks');
       const reply = await chatReply(state.settings, note, [...msgs, mine].slice(-16));
       update((s) => addChat(s, note.id, { role: 'assistant', text: reply, at: Date.now() }));
+    } catch (e) {
+      const { describeAiError } = await import('../../ai/tasks');
+      setErr(describeAiError(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /**
+   * «quiz sobre el tema 2»: la IA crea un quiz interactivo solo de eso, se guarda en Quizzes
+   * y se abre para jugarlo. En el chat queda el enlace para volver a hacerlo.
+   */
+  const quiz = async (request: string) => {
+    const r = parseQuizRequest(request, sections);
+    setBusy(r.sections.length ? `Creando tu quiz sobre «${r.focus}»…` : 'Creando tu quiz…');
+    try {
+      const q = await createQuiz(state.settings, note, { request, level: r.level ?? 'medio', count: r.count ?? 10 });
+      const at = Date.now();
+      update((s) =>
+        addChat(saveQuiz(s, q), note.id, {
+          role: 'assistant',
+          text: `🎯 **Quiz listo: ${q.title}** · ${q.steps.length} preguntas · nivel ${LEVEL_LABEL[q.level].toLowerCase()}. Queda guardado en **Quizzes** para repetirlo cuando quieras.`,
+          at,
+          quiz: request,
+          quizId: q.id,
+        }),
+      );
+      go(`/quiz/${q.id}?from=chat`);
     } catch (e) {
       const { describeAiError } = await import('../../ai/tasks');
       setErr(describeAiError(e));
@@ -144,8 +162,13 @@ export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: 
             <div key={k} className="bubble ai">
               <Markdown text={m.text} onCite={onCite} />
               {m.quiz && (
-                <button className="btn sm" style={{ marginTop: 8 }} onClick={() => onQuiz(m.quiz!)}>
-                  <ListChecks size={16} /> Hacer este quiz
+                <button
+                  className="btn sm"
+                  style={{ marginTop: 8 }}
+                  disabled={!!busy}
+                  onClick={() => (m.quizId && state.quizzes.some((x) => x.id === m.quizId) ? go(`/quiz/${m.quizId}?from=chat`) : void quiz(m.quiz!))}
+                >
+                  <ListChecks size={16} /> {m.quizId ? 'Jugar este quiz' : 'Crear este quiz'}
                 </button>
               )}
               {m.edit && (

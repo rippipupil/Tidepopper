@@ -122,6 +122,24 @@ export interface QuizRecord {
   sections?: string[];
 }
 
+/** Un quiz creado por la IA (o con tus tarjetas), guardado para jugarlo cuando quieras. */
+export interface SavedQuiz {
+  id: string;
+  noteId: string;
+  title: string;
+  /** Lo que se pidió («quiz sobre el tema 2»), para crear otro igual. */
+  request?: string;
+  /** Temas a los que se ciñe («Tema 2 · Tipos de células»). */
+  focus?: string;
+  sections?: string[];
+  level: QuizLevel;
+  steps: LessonStep[];
+  createdAt: number;
+  /** Sin IA, hecho con las tarjetas. */
+  fromCards?: boolean;
+  attempts: { at: number; correct: number; total: number }[];
+}
+
 export interface Note {
   id: string;
   title: string;
@@ -180,6 +198,8 @@ export interface ChatMsg {
   at: number;
   /** Respuesta del chat que ofrece empezar un quiz a medida con esta petición. */
   quiz?: string;
+  /** El quiz que se creó desde el chat. */
+  quizId?: string;
   /** Respuesta del chat que ha cambiado los apuntes: la versión de antes y dónde mirar. */
   edit?: { revision: number; section?: string; undone?: boolean };
 }
@@ -207,5 +227,6 @@ export interface AppState {
   folders: Folder[];
   cards: Card[];
   chats: Record<string, ChatMsg[]>; // por nota
+  quizzes: SavedQuiz[];
   settings: Settings;
 }

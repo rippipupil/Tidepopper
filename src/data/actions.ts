@@ -1,5 +1,5 @@
 // Cambios del estado: funciones puras (estado → estado nuevo), fáciles de probar.
-import type { AppState, Card, ChatMsg, Course, Folder, FolderColor, Grade, LevelContent, Note, QuizRecord, Settings } from './types';
+import type { AppState, Card, ChatMsg, Course, Folder, FolderColor, Grade, LevelContent, Note, QuizRecord, SavedQuiz, Settings } from './types';
 import { migrateV1, type V1State } from './migrate';
 import { completeLevel } from '../logic/course';
 import { newSchedule, review } from '../logic/srs';
@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export function initialState(): AppState {
-  return { version: 2, notes: [], folders: [], cards: [], chats: {}, settings: { ...DEFAULT_SETTINGS } };
+  return { version: 2, notes: [], folders: [], cards: [], chats: {}, quizzes: [], settings: { ...DEFAULT_SETTINGS } };
 }
 
 /** Completa un estado guardado con los campos que falten y convierte las versiones antiguas. */
@@ -29,6 +29,7 @@ export function hydrate(saved: unknown): AppState {
     ...v2,
     version: 2,
     notes: (v2.notes ?? []).map((n) => ({ ...n, quizzes: n.quizzes ?? [], sources: n.sources ?? [], keyPoints: n.keyPoints ?? [] })),
+    quizzes: v2.quizzes ?? [],
     settings: { ...base.settings, ...v2.settings, podcastVoices: { ...base.settings.podcastVoices, ...v2.settings?.podcastVoices } },
   };
 }
@@ -75,7 +76,32 @@ export function markEditUndone(s: AppState, noteId: string, revision: number): A
 export function deleteNote(s: AppState, id: string): AppState {
   const chats = { ...s.chats };
   delete chats[id];
-  return { ...s, notes: s.notes.filter((n) => n.id !== id), cards: s.cards.filter((c) => c.noteId !== id), chats };
+  return { ...s, notes: s.notes.filter((n) => n.id !== id), cards: s.cards.filter((c) => c.noteId !== id), chats, quizzes: s.quizzes.filter((q) => q.noteId !== id) };
+}
+
+// ---------- Quizzes guardados ----------
+
+const MAX_QUIZZES = 150;
+
+export function saveQuiz(s: AppState, quiz: SavedQuiz): AppState {
+  return { ...s, quizzes: [quiz, ...s.quizzes.filter((q) => q.id !== quiz.id)].slice(0, MAX_QUIZZES) };
+}
+
+export function deleteQuiz(s: AppState, id: string): AppState {
+  return { ...s, quizzes: s.quizzes.filter((q) => q.id !== id) };
+}
+
+/** Guarda un intento: en el quiz y en las estadísticas de la nota (dominio por tema). */
+export function recordAttempt(s: AppState, quizId: string, correct: number, total: number, now = Date.now()): AppState {
+  const quiz = s.quizzes.find((q) => q.id === quizId);
+  if (!quiz) return s;
+  const withQuiz = { ...s, quizzes: s.quizzes.map((q) => (q.id === quizId ? { ...q, attempts: [...q.attempts, { at: now, correct, total }].slice(-30) } : q)) };
+  const rec: QuizRecord = { at: now, level: quiz.level, correct, total, ...(quiz.focus ? { focus: quiz.focus, sections: quiz.sections } : {}) };
+  return recordQuiz(withQuiz, quiz.noteId, rec);
+}
+
+export function bestScore(q: SavedQuiz): number | null {
+  return q.attempts.length ? Math.max(...q.attempts.map((a) => Math.round((100 * a.correct) / a.total))) : null;
 }
 
 export function recordQuiz(s: AppState, noteId: string, rec: QuizRecord): AppState {

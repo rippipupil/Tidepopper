@@ -68,6 +68,7 @@ export function migrateV1(old: V1State, defaults: Settings): AppState {
     folders: [],
     cards,
     chats: old.chats ?? {},
+    quizzes: [],
     settings: { ...defaults, apiKey: old.settings?.apiKey ?? '', geminiKey: old.settings?.geminiKey ?? '', groqKey: old.settings?.groqKey ?? '' },
   };
 }

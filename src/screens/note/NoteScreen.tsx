@@ -22,7 +22,6 @@ export default function NoteScreen({ id, tab: initial }: { id: string; tab?: str
   const [tab, setTabState] = useState<NoteTab>(valid.includes(initial as NoteTab) ? (initial as NoteTab) : note?.course ? 'lecciones' : 'apuntes');
   const [menu, setMenu] = useState(false);
   const [sheet, setSheet] = useState<null | 'rename' | 'move'>(null);
-  const [quizRequest, setQuizRequest] = useState<{ text: string; key: number } | undefined>();
 
   if (!note)
     return (
@@ -36,7 +35,6 @@ export default function NoteScreen({ id, tab: initial }: { id: string; tab?: str
 
   const setTab = (t: NoteTab) => {
     setTabState(t);
-    if (t !== 'quiz') setQuizRequest(undefined);
     window.history.replaceState(null, '', `#/nota/${id}?tab=${t}`);
   };
 
@@ -122,7 +120,7 @@ export default function NoteScreen({ id, tab: initial }: { id: string; tab?: str
         {tab === 'apuntes' && <NotesTab note={note} onChat={() => setTab('chat')} />}
         {tab === 'lecciones' && note.course && <LessonsTab note={note} />}
         {tab === 'tarjetas' && <CardsTab note={note} />}
-        {tab === 'quiz' && <QuizTab note={note} request={quizRequest} />}
+        {tab === 'quiz' && <QuizTab note={note} />}
         {tab === 'chat' && (
           <ChatTab
             note={note}
@@ -134,10 +132,6 @@ export default function NoteScreen({ id, tab: initial }: { id: string; tab?: str
                 el?.classList.add('flash');
                 window.setTimeout(() => el?.classList.remove('flash'), 2200);
               }, 120);
-            }}
-            onQuiz={(text) => {
-              setQuizRequest({ text, key: Date.now() });
-              setTab('quiz');
             }}
           />
         )}

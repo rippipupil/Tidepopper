@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { BookOpenCheck, ChevronLeft, Home, Settings as Cog, X } from 'lucide-react';
+import { BookOpenCheck, ChevronLeft, Home, ListChecks, Settings as Cog, X } from 'lucide-react';
 
 /** Marca de la app. */
 export function Logo({ size = 34 }: { size?: number }) {
@@ -48,10 +48,11 @@ export function TopBar({ back, title, children }: { back?: string; title?: React
   );
 }
 
-export function BottomNav({ active, due }: { active: 'inicio' | 'repasar' | 'ajustes'; due?: number }) {
+export function BottomNav({ active, due }: { active: 'inicio' | 'repasar' | 'quizzes' | 'ajustes'; due?: number }) {
   const items = [
     { id: 'inicio', href: '#/', label: 'Notas', icon: <Home size={22} /> },
     { id: 'repasar', href: '#/repasar', label: 'Repasar', icon: <BookOpenCheck size={22} /> },
+    { id: 'quizzes', href: '#/quizzes', label: 'Quizzes', icon: <ListChecks size={22} /> },
     { id: 'ajustes', href: '#/ajustes', label: 'Ajustes', icon: <Cog size={22} /> },
   ] as const;
   return (
