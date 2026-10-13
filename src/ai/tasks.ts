@@ -134,6 +134,59 @@ export async function generateQuiz(keys: AiKeys, note: Note, level: QuizLevel, c
   return cleanSteps(out.questions).filter(isExercise).slice(0, count);
 }
 
+const TYPE_TEXT: Record<string, string> = {
+  elige: '«elige» (test)',
+  vf: '«vf» (verdadero o falso)',
+  hueco: '«hueco» (completar)',
+  escribe: '«escribe» (escribir la respuesta)',
+  ordena: '«ordena»',
+  parejas: '«parejas»',
+};
+
+export interface FocusedQuizRequest {
+  /** Lo que ha pedido, tal cual («quiz sobre el tema 2»). */
+  request: string;
+  /** Texto de los temas pedidos (vacío = la IA busca en toda la nota lo que se pide). */
+  sections: { n: number; title: string; body: string }[];
+  types?: string[];
+}
+
+/**
+ * Quiz a medida: solo sobre los temas pedidos y a fondo (todos sus conceptos, detalles,
+ * excepciones y casos), sin preguntar nada de fuera.
+ */
+export async function generateFocusedQuiz(keys: AiKeys, note: Note, req: FocusedQuizRequest, level: QuizLevel, count: number): Promise<LessonStep[]> {
+  const only = req.sections.length > 0;
+  const types = req.types?.filter((t) => TYPE_TEXT[t]) ?? [];
+  const typeRule = types.length
+    ? `- Usa SOLO estos tipos: ${types.map((t) => TYPE_TEXT[t]).join(', ')}.\n`
+    : '- Mezcla tipos: sobre todo «elige», y también «vf», «hueco», «escribe», «ordena» y «parejas».\n';
+  const material = only
+    ? req.sections.map((s) => `TEMA ${s.n}:\n${s.body}`).join('\n\n')
+    : noteContext(note);
+  const out = await structured(keys, {
+    schema: QuizSchema,
+    maxTokens: 16000,
+    effort: 'medium',
+    system:
+      `Pones un quiz A MEDIDA en español. El estudiante ha pedido: «${req.request}». Dificultad: ${LEVEL_TEXT[level]}\n` +
+      `- Exactamente ${count} preguntas.\n` +
+      (only
+        ? '- Pregunta ÚNICAMENTE sobre el material que te doy (es solo el tema pedido). Nada de otros temas ni de cultura general.\n' +
+          '- Entra A FONDO: cubre todos sus conceptos, definiciones, datos, detalles, excepciones, ejemplos y relaciones entre ideas, no solo la idea principal. Reparte las preguntas por todo el tema, sin repetir la misma idea.\n' +
+          '- Si el tema es corto, haz preguntas de aplicación: casos prácticos nuevos, detectar errores y comparar conceptos parecidos del mismo tema.\n'
+        : '- Busca en los apuntes la parte que corresponde a lo que pide y pregunta SOLO sobre eso, a fondo (conceptos, detalles, excepciones, casos). Si pide algo que no está en los apuntes, pregunta sobre lo más relacionado que sí esté.\n') +
+      typeRule +
+      '- Usa el campo «example» para una PISTA que ayude sin dar la respuesta.\n' +
+      '- En «explanation», explica por qué es la correcta y por qué las otras no, en 1-2 frases.\n' +
+      '- Las opciones incorrectas son del mismo tipo y formato que la correcta y se confunden con ella; nunca absurdas.',
+    user: `Apuntes «${note.title}»${only ? ' — solo el tema pedido' : ''}:\n\n${material}`,
+  });
+  const steps = cleanSteps(out.questions).filter(isExercise);
+  const wanted = steps.filter((s) => !types.length || types.includes(s.type));
+  return (wanted.length >= Math.min(3, steps.length) ? wanted : steps).slice(0, count);
+}
+
 // ---------- Pódcast ----------
 
 const PodcastSchema = z.object({

@@ -22,6 +22,7 @@ export default function NoteScreen({ id, tab: initial }: { id: string; tab?: str
   const [tab, setTabState] = useState<NoteTab>(valid.includes(initial as NoteTab) ? (initial as NoteTab) : note?.course ? 'lecciones' : 'apuntes');
   const [menu, setMenu] = useState(false);
   const [sheet, setSheet] = useState<null | 'rename' | 'move'>(null);
+  const [quizRequest, setQuizRequest] = useState<{ text: string; key: number } | undefined>();
 
   if (!note)
     return (
@@ -35,6 +36,7 @@ export default function NoteScreen({ id, tab: initial }: { id: string; tab?: str
 
   const setTab = (t: NoteTab) => {
     setTabState(t);
+    if (t !== 'quiz') setQuizRequest(undefined);
     window.history.replaceState(null, '', `#/nota/${id}?tab=${t}`);
   };
 
@@ -120,11 +122,20 @@ export default function NoteScreen({ id, tab: initial }: { id: string; tab?: str
         {tab === 'apuntes' && <NotesTab note={note} />}
         {tab === 'lecciones' && note.course && <LessonsTab note={note} />}
         {tab === 'tarjetas' && <CardsTab note={note} />}
-        {tab === 'quiz' && <QuizTab note={note} />}
-        {tab === 'chat' && <ChatTab note={note} onCite={(sec) => {
-          setTab('apuntes');
-          window.setTimeout(() => document.getElementById(sec)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
-        }} />}
+        {tab === 'quiz' && <QuizTab note={note} request={quizRequest} />}
+        {tab === 'chat' && (
+          <ChatTab
+            note={note}
+            onCite={(sec) => {
+              setTab('apuntes');
+              window.setTimeout(() => document.getElementById(sec)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+            }}
+            onQuiz={(text) => {
+              setQuizRequest({ text, key: Date.now() });
+              setTab('quiz');
+            }}
+          />
+        )}
         {tab === 'podcast' && <PodcastTab note={note} />}
         {tab === 'fuente' && <SourceTab note={note} />}
       </main>

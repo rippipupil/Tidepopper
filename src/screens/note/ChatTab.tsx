@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
-import { SendHorizontal, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ListChecks, SendHorizontal, Trash2 } from 'lucide-react';
 import { useApp } from '../../data/store';
 import { addChat, clearChat } from '../../data/actions';
 import type { ChatMsg, Note } from '../../data/types';
 import Markdown from '../../components/Markdown';
+import { isQuizRequest, parseQuizRequest, splitSections } from '../../logic/sections';
 
-const SUGGESTIONS = ['Resúmelo en 3 frases', 'Explícamelo como si tuviera 10 años', 'Ponme un ejemplo de la vida real', '¿Qué es lo más probable que caiga en el examen?', 'Hazme 3 preguntas para comprobar si lo entiendo'];
+const SUGGESTIONS = ['Resúmelo en 3 frases', 'Explícamelo como si tuviera 10 años', 'Ponme un ejemplo de la vida real', '¿Qué es lo más probable que caiga en el examen?', 'Quiz sobre el tema 1'];
 
-export default function ChatTab({ note, onCite }: { note: Note; onCite: (section: string) => void }) {
+export default function ChatTab({ note, onCite, onQuiz }: { note: Note; onCite: (section: string) => void; onQuiz: (request: string) => void }) {
   const { state, update } = useApp();
+  const sections = useMemo(() => splitSections(note.markdown), [note.markdown]);
   const msgs = state.chats[note.id] ?? [];
   const [text, setText] = useState(() => {
     const q = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('q');
@@ -28,8 +30,24 @@ export default function ChatTab({ note, onCite }: { note: Note; onCite: (section
     const mine: ChatMsg = { role: 'user', text: q, at: Date.now() };
     update((s) => addChat(s, note.id, mine));
     setText('');
-    setBusy(true);
     setErr('');
+    if (isQuizRequest(q)) {
+      // «quiz sobre el tema 2»: en vez de contestar, prepara un quiz solo de ese tema.
+      const r = parseQuizRequest(q, sections);
+      const what = r.sections.length ? `**${r.focus}**` : `lo que me pides («${q}»)`;
+      const extra = [r.count && `${r.count} preguntas`, r.level && `nivel ${r.level === 'basico' ? 'básico' : r.level}`].filter(Boolean).join(', ');
+      update((s) =>
+        addChat(s, note.id, {
+          role: 'assistant',
+          text: `¡Hecho! Te preparo un quiz solo sobre ${what}${extra ? ` (${extra})` : ''}, entrando a fondo en todos sus detalles.`,
+          at: Date.now(),
+          quiz: q,
+        }),
+      );
+      onQuiz(q);
+      return;
+    }
+    setBusy(true);
     try {
       const { chatReply } = await import('../../ai/tasks');
       const reply = await chatReply(state.settings, note, [...msgs, mine].slice(-16));
@@ -48,7 +66,7 @@ export default function ChatTab({ note, onCite }: { note: Note; onCite: (section
         <div className="col" style={{ alignItems: 'center', textAlign: 'center', gap: 10, padding: '20px 4px' }}>
           <div style={{ fontSize: 40 }}>💬</div>
           <h2>Pregúntale a tus apuntes</h2>
-          <p className="muted small">La IA responde con tu material delante y te dice de qué sección lo saca.</p>
+          <p className="muted small">La IA responde con tu material delante y te dice de qué sección lo saca. Pide también quizzes: «quiz sobre el tema 2».</p>
           <div className="row wrap" style={{ justifyContent: 'center', gap: 8, marginTop: 6 }}>
             {SUGGESTIONS.map((s) => (
               <button key={s} className="chip" onClick={() => void send(s)}>
@@ -73,6 +91,11 @@ export default function ChatTab({ note, onCite }: { note: Note; onCite: (section
           ) : (
             <div key={k} className="bubble ai">
               <Markdown text={m.text} onCite={onCite} />
+              {m.quiz && (
+                <button className="btn sm" style={{ marginTop: 8 }} onClick={() => onQuiz(m.quiz!)}>
+                  <ListChecks size={16} /> Hacer este quiz
+                </button>
+              )}
             </div>
           ),
         )}
@@ -99,7 +122,7 @@ export default function ChatTab({ note, onCite }: { note: Note; onCite: (section
           id="ask"
           rows={1}
           value={text}
-          placeholder="Pregunta lo que quieras…"
+          placeholder="Pregunta o pide un quiz…"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {

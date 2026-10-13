@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Lightbulb, RotateCcw, Sparkles, Zap } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Lightbulb, RotateCcw, SendHorizontal, Sparkles, Target, Zap } from 'lucide-react';
 import { useApp } from '../../data/store';
 import { noteCards, recordQuiz } from '../../data/actions';
 import { quizFromCards } from '../../logic/quiz';
 import { encourage, praise } from '../../logic/lesson';
+import { cleanTitle, parseQuizRequest, splitSections, type QuizRequest } from '../../logic/sections';
 import type { LessonStep, Note, QuizLevel } from '../../data/types';
 import { StepView } from '../../components/Steps';
 import { Loading } from '../../components/ui';
@@ -17,9 +18,26 @@ const LEVELS: { id: QuizLevel; label: string; text: string }[] = [
 const answerText = (s: LessonStep) =>
   s.type === 'elige' || s.type === 'hueco' ? s.options[s.answer] : s.type === 'vf' ? (s.answer ? 'Verdadero' : 'Falso') : s.type === 'escribe' ? s.accepted[0] : s.type === 'ordena' ? s.options.join(' → ') : s.pairs.map((p) => `${p.a} = ${p.b}`).join(' · ');
 
-export default function QuizTab({ note }: { note: Note }) {
+const TYPE_LABEL: Record<string, string> = { elige: 'Tipo test', vf: 'Verdadero o falso', hueco: 'Huecos', escribe: 'Escribir', ordena: 'Ordenar', parejas: 'Parejas' };
+
+const EXAMPLES = ['quiz sobre el tema 2', '15 preguntas difíciles del tema 1', 'verdadero o falso del último tema'];
+
+/** Lo que se está preguntando ahora, para guardarlo y repetirlo. */
+interface Current {
+  level: QuizLevel;
+  count: number;
+  request?: string;
+  focus?: string;
+  sections?: string[];
+}
+
+export default function QuizTab({ note, request }: { note: Note; request?: { text: string; key: number } }) {
   const { state, update } = useApp();
   const cards = noteCards(state, note.id);
+  const sections = useMemo(() => splitSections(note.markdown), [note.markdown]);
+  const [ask, setAsk] = useState('');
+  const [current, setCurrent] = useState<Current | null>(null);
+  const handled = useRef<number | null>(null);
   const [level, setLevel] = useState<QuizLevel>('medio');
   const [count, setCount] = useState(10);
   const [qs, setQs] = useState<LessonStep[] | null>(null);
@@ -40,13 +58,21 @@ export default function QuizTab({ note }: { note: Note }) {
     setFinished(false);
   };
 
-  const make = async () => {
+  const make = async (reqText?: string) => {
+    const parsed: QuizRequest | null = reqText?.trim() ? parseQuizRequest(reqText, sections) : null;
+    const cur: Current = parsed
+      ? { level: parsed.level ?? level, count: parsed.count ?? count, request: reqText!.trim(), focus: parsed.focus, sections: parsed.sections.map((x) => x.id) }
+      : { level, count };
+    setCurrent(cur);
     setBusy(true);
     setErr('');
     try {
-      const { generateQuiz } = await import('../../ai/tasks');
-      const list = await generateQuiz(state.settings, note, level, count);
+      const { generateQuiz, generateFocusedQuiz } = await import('../../ai/tasks');
+      const list = parsed
+        ? await generateFocusedQuiz(state.settings, note, { request: cur.request!, sections: parsed.sections, types: parsed.types }, cur.level, cur.count)
+        : await generateQuiz(state.settings, note, level, count);
       if (!list.length) throw new Error('La IA no ha devuelto preguntas válidas. Prueba otra vez.');
+      setAsk('');
       begin(list);
     } catch (e) {
       const { describeAiError } = await import('../../ai/tasks');
@@ -56,7 +82,22 @@ export default function QuizTab({ note }: { note: Note }) {
     }
   };
 
-  if (busy) return <Loading text={`Preparando ${count} preguntas de nivel ${LEVELS.find((l) => l.id === level)!.label.toLowerCase()}…`} />;
+  useEffect(() => {
+    if (!request || handled.current === request.key) return;
+    handled.current = request.key;
+    void make(request.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request?.key]);
+
+  const levelName = (l: QuizLevel) => LEVELS.find((x) => x.id === l)!.label.toLowerCase();
+  if (busy && current)
+    return <Loading text={current.focus ? `Preparando ${current.count} preguntas a fondo sobre «${current.focus}»…` : `Preparando ${current.count} preguntas de nivel ${levelName(current.level)}…`} />;
+
+  const focusBadge = current?.focus && (
+    <div className="tag" style={{ alignSelf: 'flex-start', background: 'var(--accent-soft)', color: 'var(--accent)', whiteSpace: 'normal' }}>
+      <Target size={14} /> {current.focus}
+    </div>
+  );
 
   if (qs && finished) {
     const correct = results.filter(Boolean).length;
@@ -65,6 +106,7 @@ export default function QuizTab({ note }: { note: Note }) {
     return (
       <div className="col fadein" style={{ gap: 16 }}>
         <section className="card pad col pop" style={{ alignItems: 'center', textAlign: 'center', gap: 6 }}>
+          {current?.focus && <div className="muted small">🎯 {current.focus}</div>}
           <div style={{ fontSize: 46 }}>{pct >= 90 ? '🏆' : pct >= 70 ? '🎉' : pct >= 50 ? '💪' : '🌱'}</div>
           <div style={{ fontSize: 40, fontWeight: 700 }}>{pct}%</div>
           <div className="muted">
@@ -89,7 +131,12 @@ export default function QuizTab({ note }: { note: Note }) {
               <RotateCcw size={17} /> Repetir fallos
             </button>
           )}
-          <button className="btn grow" onClick={() => setQs(null)}>
+          {current?.request && (
+            <button className="btn secondary grow" onClick={() => void make(current.request)}>
+              <Target size={17} /> Otro de este tema
+            </button>
+          )}
+          <button className="btn grow" onClick={() => (setQs(null), setCurrent(null))}>
             Nuevo quiz
           </button>
         </div>
@@ -109,12 +156,14 @@ export default function QuizTab({ note }: { note: Note }) {
       if (pos + 1 < qs.length) setPos(pos + 1);
       else {
         const correct = [...results].filter(Boolean).length;
-        update((s) => recordQuiz(s, note.id, { at: Date.now(), level, correct, total: qs.length }));
+        const rec = { at: Date.now(), level: current?.level ?? level, correct, total: qs.length };
+        update((s) => recordQuiz(s, note.id, current?.focus ? { ...rec, focus: current.focus, sections: current.sections } : rec));
         setFinished(true);
       }
     };
     return (
       <div className="col" style={{ gap: 14 }}>
+        {focusBadge}
         <div className="row">
           <div className="grow bar">
             <span style={{ width: `${(100 * pos) / qs.length}%`, background: 'var(--accent)' }} />
@@ -147,12 +196,75 @@ export default function QuizTab({ note }: { note: Note }) {
   }
 
   const history = note.quizzes.slice(-5).reverse();
+  const preview = ask.trim() ? parseQuizRequest(ask, sections) : null;
+  const mastery = sections.map((sec) => {
+    const done = note.quizzes.filter((q) => q.sections?.includes(sec.id));
+    const best = done.length ? Math.max(...done.map((q) => Math.round((100 * q.correct) / q.total))) : null;
+    return { sec, best, times: done.length };
+  });
   return (
     <div className="col fadein" style={{ gap: 16 }}>
+      <section className="card pad col" style={{ gap: 12 }}>
+        <div>
+          <h2>Pide tu quiz</h2>
+          <p className="muted small">Escríbelo como en un chat y te pregunto solo de eso, a fondo. Por ejemplo: «{EXAMPLES[0]}».</p>
+        </div>
+        <form
+          className="composer"
+          style={{ position: 'static', boxShadow: 'none' }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (ask.trim()) void make(ask);
+          }}
+        >
+          <label className="sr" htmlFor="quizask">
+            Tu quiz a medida
+          </label>
+          <textarea
+            id="quizask"
+            rows={1}
+            value={ask}
+            placeholder="Quiz sobre el tema 2…"
+            onChange={(e) => setAsk(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (ask.trim()) void make(ask);
+              }
+            }}
+          />
+          <button type="submit" className="btn" style={{ width: 46, height: 46, padding: 0, minHeight: 46 }} aria-label="Crear quiz a medida" disabled={!ask.trim()}>
+            <SendHorizontal size={20} />
+          </button>
+        </form>
+        {preview ? (
+          <div className="row wrap fadein" style={{ gap: 6 }} aria-live="polite">
+            <span className="tag" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', whiteSpace: 'normal' }}>
+              {preview.sections.length ? '🎯' : '🔎'} {preview.sections.length ? preview.focus : 'La IA buscará eso en tus apuntes'}
+            </span>
+            <span className="tag">{preview.count ?? count} preguntas</span>
+            <span className="tag">Nivel {levelName(preview.level ?? level)}</span>
+            {preview.types?.map((t) => (
+              <span key={t} className="tag">
+                {TYPE_LABEL[t]}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="row wrap" style={{ gap: 6 }}>
+            {(sections.length >= 2 ? sections.map((x) => `quiz sobre el tema ${x.n}`).slice(0, 8) : EXAMPLES).map((ex) => (
+              <button key={ex} className="chip" onClick={() => setAsk(ex)}>
+                {ex.replace(/^quiz sobre el tema (\d+)$/, (_, n) => `Tema ${n} · ${cleanTitle(sections[Number(n) - 1].title)}`)}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="card pad col" style={{ gap: 16 }}>
         <div>
           <h2>Ponte a prueba</h2>
-          <p className="muted small">Preguntas variadas con pista y explicación, sacadas de tus apuntes.</p>
+          <p className="muted small">Preguntas variadas con pista y explicación. La dificultad y el número también se usan en tus quizzes a medida si no dices otra cosa.</p>
         </div>
         <div className="col" style={{ gap: 8 }}>
           <span className="label">Dificultad</span>
@@ -176,15 +288,36 @@ export default function QuizTab({ note }: { note: Note }) {
           </div>
         </div>
         <button className="btn block" onClick={() => void make()}>
-          <Sparkles size={18} /> Crear quiz con IA
+          <Sparkles size={18} /> Quiz de toda la nota
         </button>
         {cards.length >= 4 && (
-          <button className="btn secondary block" onClick={() => begin(quizFromCards(cards, count))}>
+          <button className="btn secondary block" onClick={() => (setCurrent(null), begin(quizFromCards(cards, count)))}>
             <Zap size={18} /> Quiz rápido con mis tarjetas (sin IA)
           </button>
         )}
         {err && <div className="alert bad">{err}</div>}
       </section>
+      {sections.length >= 2 && (
+        <section className="col" style={{ gap: 8 }}>
+          <h3>Tu dominio por tema</h3>
+          {mastery.map(({ sec, best, times }) => (
+            <div key={sec.n} className="row soft" style={{ gap: 10 }}>
+              <div className="grow col" style={{ gap: 4, minWidth: 0 }}>
+                <span className="small" style={{ fontWeight: 600 }}>
+                  Tema {sec.n} · {cleanTitle(sec.title)}
+                </span>
+                <div className="bar" style={{ height: 6 }}>
+                  <span style={{ width: `${best ?? 0}%`, background: best === null ? 'transparent' : best >= 80 ? 'var(--good)' : best >= 50 ? 'var(--warn)' : 'var(--bad)' }} />
+                </div>
+                <span className="muted small">{best === null ? 'Aún sin practicar' : `Mejor nota ${best}% · ${times} ${times === 1 ? 'quiz' : 'quizzes'}`}</span>
+              </div>
+              <button className="btn secondary sm" aria-label={`Quiz del tema ${sec.n}`} onClick={() => void make(`quiz sobre el tema ${sec.n}`)}>
+                <Target size={15} /> Quiz
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
       {history.length > 0 && (
         <section className="col" style={{ gap: 8 }}>
           <h3>Tus últimos quizzes</h3>
@@ -193,6 +326,7 @@ export default function QuizTab({ note }: { note: Note }) {
             return (
               <div key={k} className="row soft">
                 <span className="grow small">
+                  {h.focus ? `🎯 ${h.focus} · ` : ''}
                   {LEVELS.find((l) => l.id === h.level)?.label} · {new Date(h.at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                 </span>
                 <span className={`tag ${pct >= 70 ? 'pill-good' : pct >= 50 ? 'pill-warn' : 'pill-bad'}`}>

@@ -117,6 +117,7 @@ export default function NotesTab({ note }: { note: Note }) {
         <nav className="card pad col fadein" style={{ gap: 4 }} aria-label="Índice">
           {sections.map((s, i) => (
             <a key={i} href={`#${s.id}`} onClick={(e) => (e.preventDefault(), document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth' }))} style={{ paddingLeft: s.level === 3 ? 16 : 0, color: s.level === 3 ? 'var(--muted)' : 'var(--text)', padding: '5px 0', fontSize: 15 }}>
+              {s.level === 2 && <span className="muted small">Tema {sections.slice(0, i + 1).filter((x) => x.level === 2).length} · </span>}
               {s.text}
             </a>
           ))}

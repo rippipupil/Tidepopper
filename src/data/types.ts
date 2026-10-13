@@ -116,6 +116,10 @@ export interface QuizRecord {
   level: QuizLevel;
   correct: number;
   total: number;
+  /** Quiz a medida: lo que se preguntó («Tema 2 · Tipos de células»). */
+  focus?: string;
+  /** Ids de los temas («## ») a los que se ciñó el quiz. */
+  sections?: string[];
 }
 
 export interface Note {
@@ -164,6 +168,8 @@ export interface ChatMsg {
   role: 'user' | 'assistant';
   text: string;
   at: number;
+  /** Respuesta del chat que ofrece empezar un quiz a medida con esta petición. */
+  quiz?: string;
 }
 
 export type Theme = 'system' | 'dark' | 'light';
